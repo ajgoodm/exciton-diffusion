@@ -1,0 +1,12 @@
+{
+  "name": "exciton-diffusion",
+  "description": "exciton diffusion simulations",
+  "main": "index.js",
+  "devDependencies": {
+    "@indigo-ag/indigo-scripts": "latest",
+    "husky": "4.3.5"
+  },
+  "scripts": {
+    "precommit": "python tools/precommit_format.py"
+  }
+}
