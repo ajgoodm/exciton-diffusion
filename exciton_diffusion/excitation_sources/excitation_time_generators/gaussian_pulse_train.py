@@ -43,8 +43,11 @@ class GaussianPulseTrainGenerator:
 
         delays_from_pulse_peaks_s = np.random.normal(scale=self.pulse_standard_deviation_s, size=2 * total_excitations_generated)
         excitation_pulse_indices = np.random.randint(low=0, high=n_pulses, size=2 * total_excitations_generated)
-        
+
         excitation_times = (excitation_pulse_indices * self.repetition_period_s) + delays_from_pulse_peaks_s
         excitation_times = excitation_times[np.where(excitation_times > start_s)]
-        excitation_times = np.sort(excitation_times[np.where(excitation_times < end_s)])
-        return excitation_times[:n_excitations]
+        excitation_times = excitation_times[np.where(excitation_times < end_s)]
+        excitation_times = excitation_times[:n_excitations]
+        excitation_times = np.sort(excitation_times)
+
+        return tuple(excitation_times)
