@@ -16,3 +16,4 @@ excito_diffusion.egg-info
 build/*
 dist/*
 *.log
+*egg-info*
