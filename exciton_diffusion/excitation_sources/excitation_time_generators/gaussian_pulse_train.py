@@ -1,9 +1,10 @@
-"""Utilities to generate a train of gaussian pulses
+"""Utility to generate a train of gaussian pulses (in time)
 """
 import math
 
 import attr
 import numpy as np
+
 
 @attr.s(frozen=True, slots=True)
 class GaussianPulseTrainGenerator:
@@ -32,6 +33,9 @@ class GaussianPulseTrainGenerator:
             start_s: earliest possible excitation time
             end_s: latest possible excitation time
             n_excitations: number of excitations to return
+        
+        Returns:
+            A tuple of excitation event times in seconds
         """
         # To ensure a realistic distribution and deal with edge effects,
         # create twice as many excitations as requested and return only
@@ -41,8 +45,8 @@ class GaussianPulseTrainGenerator:
         duration_s = end_s - start_s
         n_pulses = math.ceil(duration_s / self.repetition_period_s)
 
-        delays_from_pulse_peaks_s = np.random.normal(scale=self.pulse_standard_deviation_s, size=2 * total_excitations_generated)
-        excitation_pulse_indices = np.random.randint(low=0, high=n_pulses, size=2 * total_excitations_generated)
+        delays_from_pulse_peaks_s = np.random.normal(scale=self.pulse_standard_deviation_s, size=total_excitations_generated)
+        excitation_pulse_indices = np.random.randint(low=0, high=n_pulses, size=total_excitations_generated)
 
         excitation_times = (excitation_pulse_indices * self.repetition_period_s) + delays_from_pulse_peaks_s
         excitation_times = excitation_times[np.where(excitation_times > start_s)]

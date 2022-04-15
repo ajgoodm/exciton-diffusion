@@ -1,5 +1,3 @@
-import pytest
-
 from exciton_diffusion.excitation_sources.excitation_time_generators.gaussian_pulse_train import (
     GaussianPulseTrainGenerator,
 )
