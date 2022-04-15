@@ -19,10 +19,10 @@ class Experiment(ABC):
     def is_complete(self) -> bool:
         return self._is_complete
 
-    def configure(self, *args, **kwargs):
+    def configure(self, **kwargs):
         """Configure an experiment
         """
-        self._configure(*args, **kwargs)
+        self._configure(**kwargs)
         self._is_configured = True
 
 
@@ -42,7 +42,7 @@ class Experiment(ABC):
         self._report()
 
     @abstractmethod
-    def _configure(self, *args, **kwargs):
+    def _configure(self, **kwargs):
         raise NotImplementedError
 
     @abstractmethod

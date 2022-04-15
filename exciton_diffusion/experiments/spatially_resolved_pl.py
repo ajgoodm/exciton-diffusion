@@ -1,10 +1,36 @@
 """Simulate a time-resolved photoluminescence lifetime experiment.
 """
+import attr
+
 from exciton_diffusion.experiments.base import Experiment
 
+@attr.s(slots=True)
 class SpatiallyResolvedPLExperiment(Experiment):
-    def _configure(self):
-        pass
+    #: simulation start time in seconds
+    start_s: float = attr.ib(default=None)
+    #: simulation end time in seconds
+    end_s: float = attr.ib(default=None)
+    #: simulation time step in seconds
+    time_step_s: float = attr.ib(default=None)
+    #: laser wavelength in nanometers
+    excitation_wavelength_nm: float = attr.ib(default=None)
+    #: laser power in watts
+    laser_power_w: float = attr.ib(default=True)
+
+    def _configure(
+        self,
+        *,
+        start_s: float,
+        end_s: float,
+        time_step_s: float,
+        excitation_wavelength_nm: float,
+        laser_power_w: float,
+    ):
+        self.start_s = start_s
+        self.end_s = end_s
+        self.time_step_s = time_step_s
+        self.excitation_wavelength_nm = excitation_wavelength_nm
+        self.laser_power_w = laser_power_w
 
     def _run(self):
         pass
