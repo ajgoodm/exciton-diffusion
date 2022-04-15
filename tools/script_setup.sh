@@ -9,5 +9,5 @@ REPO_ROOT=$(pwd)
 cd $CWD
 
 TOOLS_DIR=$REPO_ROOT/tools
-PYTHON_VER=3.8.2
+PYTHON_VER=3.9.10
 VIRTUAL_PY=venv.exciton_diffusion

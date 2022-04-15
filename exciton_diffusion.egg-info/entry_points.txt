@@ -1,3 +1,0 @@
-[console_scripts]
-exciton-diffusion = exciton_diffusion.cli:cli
-
