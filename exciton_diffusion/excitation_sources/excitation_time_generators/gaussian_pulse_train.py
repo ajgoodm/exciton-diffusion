@@ -5,9 +5,11 @@ import math
 import attr
 import numpy as np
 
+from exciton_diffusion.excitation_sources.excitation_time_generators.base import ExcitationTimeGenerator
+
 
 @attr.s(frozen=True, slots=True)
-class GaussianPulseTrainGenerator:
+class GaussianPulseTrainGenerator(ExcitationTimeGenerator):
     #: The pulsed source repetition rate
     repetition_rate_hz: float = attr.ib()
     #: The pulse width in seconds 
@@ -25,7 +27,7 @@ class GaussianPulseTrainGenerator:
         """
         return self.pulse_full_width_half_max_s / 2.355
 
-    def gaussian_pulse_train_generator(self, start_s: float, end_s: float, n_excitations: int) -> tuple[float]:
+    def generate(self, start_s: float, end_s: float, n_excitations: int) -> tuple[float]:
         """Generate a train of excitation times bunched into gaussian pulses
         with this source's characteristics (reptition rate and pulse width)
 

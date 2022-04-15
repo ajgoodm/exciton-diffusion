@@ -23,7 +23,7 @@ class TestGaussianPulseTrainGenerator:
         end = 5e-5  # +50 microseconds
         n_excitations = int(1e6)
 
-        excitations = generator.gaussian_pulse_train_generator(
+        excitations = generator.generate(
             start_s=start, end_s=end, n_excitations=n_excitations
         )
 

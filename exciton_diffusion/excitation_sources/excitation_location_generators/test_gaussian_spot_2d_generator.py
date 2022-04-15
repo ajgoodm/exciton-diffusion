@@ -10,5 +10,5 @@ class TestGaussianSpot2DGenerator:
         )
 
         n_points = 1000
-        points = generator.gaussian_spot_2d_generator(n_excitations=n_points)
+        points = generator.generate(n_excitations=n_points)
         assert len(points) == n_points

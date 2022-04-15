@@ -4,9 +4,11 @@ import attr
 
 import numpy as np
 
+from exciton_diffusion.excitation_sources.excitation_location_generators.base import ExcitationLocationGenerator
+
 
 @attr.s(frozen=True, slots=True)
-class GaussianSpot2DGenerator:
+class GaussianSpot2DGenerator(ExcitationLocationGenerator):
     #: The spot sidth in meters
     full_width_half_max_m: float = attr.ib()
 
@@ -16,7 +18,7 @@ class GaussianSpot2DGenerator:
         """
         return self.full_width_half_max_m / 2.355
     
-    def gaussian_spot_2d_generator(self, n_excitations: int) -> tuple[tuple[float, float]]:
+    def generate(self, n_excitations: int) -> tuple[tuple[float, float]]:
         """Generate a series of excitation locations that form a
         Gaussian excitation profile with this source's characteristics (width)
 
