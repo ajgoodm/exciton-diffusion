@@ -94,7 +94,7 @@ class ExcitonPopulation2D(EmitterPopulation2D):
         if self.nonradiative_rate_hz is not None:
             total_linear_decay_rate_hz += self.nonradiative_rate_hz
         
-        probability_of_decay = math.exp(-total_linear_decay_rate_hz * time_step_s)
+        probability_of_decay = 1 - math.exp(-total_linear_decay_rate_hz * time_step_s)
         random_rolls = np.random.random(size=self.n_excitons)
 
         decayed = np.where(random_rolls <= probability_of_decay)
