@@ -3,9 +3,10 @@
 import attr
 
 from exciton_diffusion.experiments.base import Experiment
+from exciton_diffusion.excitation_sources import ExcitationProfile2D
 
 @attr.s(slots=True)
-class SpatiallyResolvedPLExperiment(Experiment):
+class SpatiallyResolvedPL2DExperiment(Experiment):
     #: simulation start time in seconds
     start_s: float = attr.ib(default=None)
     #: simulation end time in seconds
@@ -15,7 +16,10 @@ class SpatiallyResolvedPLExperiment(Experiment):
     #: laser wavelength in nanometers
     excitation_wavelength_nm: float = attr.ib(default=None)
     #: laser power in watts
-    laser_power_w: float = attr.ib(default=True)
+    laser_power_w: float = attr.ib(default=None)
+    #: excitation source
+    excitation_source: ExcitationProfile2D = attr.ib(default=None)
+    #: exciton population
 
     def _configure(
         self,

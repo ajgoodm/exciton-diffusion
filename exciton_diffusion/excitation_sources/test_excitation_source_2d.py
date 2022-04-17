@@ -24,7 +24,13 @@ class TestExcitationProfile2D:
             excitation_time_generator=excitation_time_generator,
             excitation_location_generator=excitation_location_generator,
         )
-        excitations = excitation_profile.get_excitations()
+        excitation_profile.prepare()
+        too_early = excitation_profile.yield_excitations_up_to_t(-1)
+        assert not too_early
+
+        first_batch = excitation_profile.yield_excitations_up_to_t(0)
+        second_batch = excitation_profile.yield_excitations_up_to_t(end)
+        excitations = first_batch + second_batch
 
         assert all(e.t_s >= start for e in excitations)
         assert all(e.t_s <= end for e in excitations)

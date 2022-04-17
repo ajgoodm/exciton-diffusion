@@ -1,9 +1,9 @@
-from exciton_diffusion.experiments.spatially_resolved_pl import SpatiallyResolvedPLExperiment
+from exciton_diffusion.experiments.spatially_resolved_pl_2d import SpatiallyResolvedPL2DExperiment
 
 
-class TestSpatiallyResolvedPLExperiment:
+class TestSpatiallyResolvedPL2DExperiment:
     def test_state_machine(self):
-        experiment = SpatiallyResolvedPLExperiment()
+        experiment = SpatiallyResolvedPL2DExperiment()
         experiment.configure(
             start_s=1,
             end_s=2,

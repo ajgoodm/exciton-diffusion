@@ -1,4 +1,3 @@
-import math
 import typing as T
 from abc import ABC
 
@@ -22,7 +21,7 @@ class Excitation2D:
     t_s: float = attr.ib()
 
 
-@attr.s(frozen=True, slots=True)
+@attr.s(slots=True)
 class ExcitationProfile2D:
     """Parameters used to generate a stream of excitation events in the plane.
     """
@@ -42,22 +41,52 @@ class ExcitationProfile2D:
     #: excitation location series generator with method `generate(n_excitations) -> tuple[[float, float]]`
     excitation_location_generator: ExcitationLocationGenerator = attr.ib(validator=instance_of(ExcitationLocationGenerator))
 
-    def get_excitations(self) -> tuple[Excitation2D]:
+    #: generator of excitations populated by self.prepare method
+    _excitations: T.Generator[Excitation2D, None, None] = attr.ib(default=None)
+
+    #: if we've yielded an excitation from our generator that we did not
+    #: yet return, stop iteration and store it here for later.
+    _previous_excitation: T.Optional[Excitation2D] = attr.ib(default=None)
+
+    def prepare(self) -> tuple[Excitation2D]:
         """Generate a series of excitations for this profile
+        and store it on the instance.
 
         Args:
             n_excitations: total number of excitations to generate
-
-        Returns:
-            A series of excitation excitation events in the plane
         """
         excitation_times = self.excitation_time_generator.generate(start_s=self.start_s, end_s=self.end_s, n_excitations=self.n_excitations)
         excitation_locations = self.excitation_location_generator.generate(n_excitations=self.n_excitations)
 
-        return tuple(
+        self._excitations = (
             Excitation2D(
                 x_m=point[0],
                 y_m=point[1],
                 t_s=time,
             ) for time, point in zip(excitation_times, excitation_locations) 
         )
+
+    def yield_excitations_up_to_t(self, t_s: float) -> list[Excitation2D]:
+        """Yield all excitations from self._excitations that occur prior to t_s.
+        Because self._excitations is a generator, we will only ever yield each
+        excitation once.
+        """
+        excitations: list[Excitation2D] = []
+
+        if self._previous_excitation is not None and self._previous_excitation.t_s <= t_s:
+            excitations.append(self._previous_excitation)
+            self._previous_excitation = None
+
+        while True:
+            try:
+                excitation = next(self._excitations)
+                if excitation.t_s <= t_s:
+                    excitations.append(excitation)
+                else:
+                    self._previous_excitation = excitation
+                    break
+
+            except StopIteration:
+                break
+
+        return excitations

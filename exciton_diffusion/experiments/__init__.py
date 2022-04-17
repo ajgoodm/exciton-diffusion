@@ -1,2 +1,2 @@
 from exciton_diffusion.experiments.base import Experiment
-from exciton_diffusion.experiments.spatially_resolved_pl import SpatiallyResolvedPLExperiment
+from exciton_diffusion.experiments.spatially_resolved_pl_2d import SpatiallyResolvedPL2DExperiment
