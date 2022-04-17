@@ -73,9 +73,12 @@ class ExcitationProfile2D:
         """
         excitations: list[Excitation2D] = []
 
-        if self._previous_excitation is not None and self._previous_excitation.t_s <= t_s:
-            excitations.append(self._previous_excitation)
-            self._previous_excitation = None
+        if self._previous_excitation is not None:
+            if self._previous_excitation.t_s <= t_s:
+                excitations.append(self._previous_excitation)
+                self._previous_excitation = None
+            else:
+                return excitations
 
         while True:
             try:

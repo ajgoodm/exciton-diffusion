@@ -1,46 +1,42 @@
 import math
 import typing as T
+from abc import abstractmethod, ABC
 
 import attr
 import numpy as np
 
+from exciton_diffusion.excitation_sources.excitation_source_2d import Excitation2D
+
 
 @attr.s(slots=True)
-class ExcitonPopulation2D:
+class EmissionEvent2D:
+    x_m: float = attr.ib()
+    y_m: float = attr.ib()
+    t_s: float = attr.ib(default=None)
+
+
+@attr.s(slots=True)
+class EmitterPopulation2D(ABC):
     x_coords_m: np.array = attr.ib(default=None)
     y_coords_m: np.array = attr.ib(default=None)
-    radiative_lifetime: float = attr.ib(default=None)
-    nonradiative_lifetime: T.Optional[float] = attr.ib(default=None)
-    routines: list[T.Callable[[float], list[tuple[float, float]]]] = attr.ib(default=None)
+    routines: list[T.Callable[[float], list[tuple[float, float]]]] = attr.ib(factory=list)
 
-    def initialize(
-        self,
-        radiative_lifetime: float,
-        nonradiative_lifetime: T.Optional[float],
-    ):
-        self.x_coords_m = np.array([], dtype=np.float64)
-        self.y_coords_m = np.array([], dtype=np.float64)
-        self.radiative_lifetime = radiative_lifetime
-        self.nonradiative_lifetime = nonradiative_lifetime
-        self.routines.append(self.linear_decay)
+    @abstractmethod
+    def initialize(self, *args, **kwargs):
+        raise NotImplementedError
 
     @property
     def n_excitons(self) -> int:
         return self.x_coords_m.shape[0]
 
-    @property
-    def radiative_rate_hz(self) -> float:
-        return 1 / self.radiative_lifetime
-    
-    @property
-    def nonradiative_rate_hz(self) -> T.Optional[float]:
-        if self.nonradiative_lifetime is not None:
-            return 1 / self.nonradiative_lifetime
-        return None
+    def add_excitations_2d(self, excitations: list[Excitation2D]):
+        x_coords_m = []
+        y_coords_m = []
 
-    def add_excitons(self, x_coords_m: tuple[float], y_coords_m: tuple[float]):
-        if not len(x_coords_m) == len(y_coords_m):
-            raise ValueError("x coordinate list and y coordinate list must have the same length")
+        for excitation in excitations:
+            x_coords_m.append(excitation.x_m)
+            y_coords_m.append(excitation.y_m)
+
         self.x_coords_m = np.concatenate([
             self.x_coords_m, np.array(x_coords_m)
         ])
@@ -48,9 +44,41 @@ class ExcitonPopulation2D:
             self.y_coords_m, np.array(y_coords_m)
         ])
 
-    def step(self, time_step_s: float):
+    def step(self, time_step_s: float) -> list[EmissionEvent2D]:
+        emission_events: list[EmissionEvent2D] = []
         for routine in self.routines:
-            routine(time_step_s)
+            events = routine(time_step_s)
+            if events is not None:
+                emission_events.extend(events)
+        
+        return events
+
+
+@attr.s(slots=True)
+class ExcitonPopulation2D(EmitterPopulation2D):
+    radiative_lifetime_s: float = attr.ib(default=None)
+    nonradiative_lifetime_s: T.Optional[float] = attr.ib(default=None)
+
+    def initialize(
+        self,
+        radiative_lifetime_s: float,
+        nonradiative_lifetime_s: T.Optional[float]=None,
+    ):
+        self.x_coords_m = np.array([], dtype=np.float64)
+        self.y_coords_m = np.array([], dtype=np.float64)
+        self.radiative_lifetime_s = radiative_lifetime_s
+        self.nonradiative_lifetime_s = nonradiative_lifetime_s
+        self.routines.append(self.linear_decay)
+
+    @property
+    def radiative_rate_hz(self) -> float:
+        return 1 / self.radiative_lifetime_s
+    
+    @property
+    def nonradiative_rate_hz(self) -> T.Optional[float]:
+        if self.nonradiative_lifetime_s is not None:
+            return 1 / self.nonradiative_lifetime_s
+        return None
 
     def linear_decay(self, time_step_s: float) -> list[tuple[float, float]]:
         """Simulates linear decay processes (radiative and optionally nonradiative)
@@ -86,6 +114,6 @@ class ExcitonPopulation2D:
         self.y_coords_m = self.y_coords_m[not_decayed]
         
         return [
-            (x, y) for x, y
+            EmissionEvent2D(x_m=x, y_m=y) for x, y
             in zip(radiative_decayed_x_m, radiative_decayed_y_m)
         ]
