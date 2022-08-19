@@ -12,7 +12,7 @@ class TestGaussianPulseTrainGenerator:
 
         assert generator.repetition_period_s == 10
         assert generator.pulse_standard_deviation_s == 1 / 2.355
-    
+
     def test_gaussian_pulse_train_generator(self):
         generator = GaussianPulseTrainGenerator(
             repetition_rate_hz=1e6,

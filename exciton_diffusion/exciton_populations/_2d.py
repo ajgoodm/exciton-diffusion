@@ -66,15 +66,20 @@ class ExcitonPopulation2D(EmitterPopulation2D):
         radiative_lifetime_s: float,
         nonradiative_lifetime_s: T.Optional[float]=None,
         diffusivity_m2_per_s: T.Optional[float]=None,
+        interaction_radius_m: T.Optional[float]=None,
     ):
         self.x_coords_m = np.array([], dtype=np.float64)
         self.y_coords_m = np.array([], dtype=np.float64)
         self.radiative_lifetime_s = radiative_lifetime_s
         self.nonradiative_lifetime_s = nonradiative_lifetime_s
         self.diffusivity_m2_per_s = diffusivity_m2_per_s
+        self.interaction_radius_m = interaction_radius_m
+
         self.routines.append(self.linear_decay)
         if diffusivity_m2_per_s is not None:
             self.routines.append(self.diffusion)
+        if interaction_radius_m is not None:
+            self.routes.append(self.annihilation)
 
     @property
     def radiative_rate_hz(self) -> float:
@@ -139,3 +144,9 @@ class ExcitonPopulation2D(EmitterPopulation2D):
 
         self.x_coords_m += dx_m
         self.y_coords_m += dy_m
+
+    def annihilation(self, time_step_s: float):
+        """Simulates exciton-exciton annihilation. If the distance separating
+        any two excitons is less than twice the interaction radius, one of the
+        excitons nonradiatively decays.
+        """
