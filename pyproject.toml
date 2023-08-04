@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "exciton-diffusion"
+version = "0.1.0"
+description = "Modelling suite for 2D photoluminescence experiments"
+authors = [
+  "Aaron Aster <aarongoodm@gmail.com>"
+]
+repository = "https://github.com/ajgoodm/exciton-diffusion"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+attrs = ">=23.1.0"
+numpy = "~1.23"
+
+[tool.poetry.group.dev.dependencies]
+pre-commit = "~3"
+pytest = "~7"
+
