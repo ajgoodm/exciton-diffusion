@@ -9,7 +9,8 @@ from exciton_diffusion.exciton_populations import (
     EmitterPopulation2D,
 )
 
-@attr.s(slots=True)
+
+@attr.define
 class SpatiallyResolvedPL2DExperiment(Experiment):
     #: simulation start time in seconds
     start_s: float = attr.ib(default=None)
@@ -32,24 +33,26 @@ class SpatiallyResolvedPL2DExperiment(Experiment):
         excitation_source: ExcitationProfile2D,
         emitter_population: EmitterPopulation2D,
         time_step_s: float,
-    ):
+    ) -> None:
         self.start_s = start_s
         self.end_s = end_s
         self.time_step_s = time_step_s
-        self.excitation_source=excitation_source
-        self.emitter_population=emitter_population
+        self.excitation_source = excitation_source
+        self.emitter_population = emitter_population
         self.emission_events = []
 
-    def _run(self):
+    def _run(self) -> None:
         # yield excitations in the generator up to experiment start
-        self.excitation_source.yield_excitations_up_to_t(self.start_s - self.time_step_s)
+        self.excitation_source.yield_excitations_up_to_t(
+            self.start_s - self.time_step_s
+        )
 
         t_s = self.start_s
         while t_s <= self.end_s:
             self._step(t_s)
             t_s += self.time_step_s
 
-    def _step(self, t_s: float):
+    def _step(self, t_s: float) -> None:
         """Step the experiment from the previous time to t_s
 
         Arguments:
@@ -62,5 +65,5 @@ class SpatiallyResolvedPL2DExperiment(Experiment):
             event.t_s = t_s
         self.emission_events.extend(emission_events)
 
-    def _report(self):
+    def _report(self) -> None:
         pass

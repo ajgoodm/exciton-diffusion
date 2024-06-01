@@ -4,21 +4,22 @@ import attr
 
 import numpy as np
 
-from exciton_diffusion.excitation_sources.excitation_location_generators.base import ExcitationLocationGenerator
+from exciton_diffusion.excitation_sources.excitation_location_generators.base import (
+    ExcitationLocationGenerator,
+)
 
 
-@attr.s(frozen=True, slots=True)
+@attr.frozen
 class GaussianSpot2DGenerator(ExcitationLocationGenerator):
     #: The spot sidth in meters
-    full_width_half_max_m: float = attr.ib()
+    full_width_half_max_m: float
 
     @property
     def standard_deviation_m(self) -> float:
-        """Convert the full width, half max to a standard deviation
-        """
+        """Convert the full width, half max to a standard deviation"""
         return self.full_width_half_max_m / 2.355
-    
-    def generate(self, n_excitations: int) -> tuple[tuple[float, float]]:
+
+    def generate(self, n_excitations: int) -> tuple[tuple[float, float], ...]:
         """Generate a series of excitation locations that form a
         Gaussian excitation profile with this source's characteristics (width)
 
@@ -30,7 +31,17 @@ class GaussianSpot2DGenerator(ExcitationLocationGenerator):
         Return:
             A tuple of excitation location coordinate pairs in meters
         """
-        x_coords = np.random.normal(scale=self.standard_deviation_m, size=n_excitations)
-        y_coords = np.random.normal(scale=self.standard_deviation_m, size=n_excitations)
+        x_coords: tuple[float, ...] = tuple(
+            np.random.normal(scale=self.standard_deviation_m, size=n_excitations)
+        )
+        y_coords: tuple[float, ...] = tuple(
+            np.random.normal(scale=self.standard_deviation_m, size=n_excitations)
+        )
 
-        return tuple((x, y,) for x, y in zip(x_coords, y_coords))
+        return tuple(
+            (
+                x,
+                y,
+            )
+            for x, y in zip(x_coords, y_coords)
+        )

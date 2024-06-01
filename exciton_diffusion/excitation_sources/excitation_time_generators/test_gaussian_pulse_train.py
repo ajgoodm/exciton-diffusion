@@ -6,13 +6,12 @@ from exciton_diffusion.excitation_sources.excitation_time_generators.gaussian_pu
 class TestGaussianPulseTrainGenerator:
     def test_repitition_period_s(self):
         generator = GaussianPulseTrainGenerator(
-            repetition_rate_hz = 0.1,
-            pulse_full_width_half_max_s=1
+            repetition_rate_hz=0.1, pulse_full_width_half_max_s=1
         )
 
         assert generator.repetition_period_s == 10
         assert generator.pulse_standard_deviation_s == 1 / 2.355
-    
+
     def test_gaussian_pulse_train_generator(self):
         generator = GaussianPulseTrainGenerator(
             repetition_rate_hz=1e6,
