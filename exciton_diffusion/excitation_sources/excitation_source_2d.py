@@ -1,45 +1,48 @@
 import typing as T
-from abc import ABC
 
 import attr
-from attr.validators import instance_of
 
-from exciton_diffusion.excitation_sources.excitation_location_generators import ExcitationLocationGenerator
-from exciton_diffusion.excitation_sources.excitation_time_generators import ExcitationTimeGenerator
+from exciton_diffusion.excitation_sources.excitation_location_generators import (
+    ExcitationLocationGenerator,
+)
+from exciton_diffusion.excitation_sources.excitation_time_generators import (
+    ExcitationTimeGenerator,
+)
 
 
-@attr.s(frozen=True, slots=True)
+__all__ = ["Excitation2D", "ExcitationProfile2D"]
+
+
+@attr.frozen
 class Excitation2D:
-    """Representation of a single excitation event in the plane.
-    """
+    """Representation of a single excitation event in the plane."""
 
     #: x coordinate in meters
-    x_m: float = attr.ib()
+    x_m: float
     #: y coordinate in meters
-    y_m: float = attr.ib()
+    y_m: float
     #: excitation time in seconds
-    t_s: float = attr.ib()
+    t_s: float
 
 
-@attr.s(slots=True)
+@attr.define
 class ExcitationProfile2D:
-    """Parameters used to generate a stream of excitation events in the plane.
-    """
+    """Parameters used to generate a stream of excitation events in the plane."""
 
     #: earliest excitation time
-    start_s: float = attr.ib()
+    start_s: float
 
     #: latest excitation time
-    end_s: float = attr.ib()
+    end_s: float
 
     #: total number of excitations
-    n_excitations: int = attr.ib()
+    n_excitations: int
 
     #: excitation time series generator with method `generate(start_s, end_s, n_excitations) -> tuple[float]`
-    excitation_time_generator: ExcitationTimeGenerator = attr.ib(validator=instance_of(ExcitationTimeGenerator))
+    excitation_time_generator: ExcitationTimeGenerator
 
     #: excitation location series generator with method `generate(n_excitations) -> tuple[[float, float]]`
-    excitation_location_generator: ExcitationLocationGenerator = attr.ib(validator=instance_of(ExcitationLocationGenerator))
+    excitation_location_generator: ExcitationLocationGenerator
 
     #: generator of excitations populated by self.prepare method
     _excitations: T.Generator[Excitation2D, None, None] = attr.ib(default=None)
@@ -48,22 +51,27 @@ class ExcitationProfile2D:
     #: yet return, stop iteration and store it here for later.
     _previous_excitation: T.Optional[Excitation2D] = attr.ib(default=None)
 
-    def prepare(self) -> tuple[Excitation2D]:
+    def prepare(self) -> None:
         """Generate a series of excitations for this profile
         and store it on the instance.
 
         Args:
             n_excitations: total number of excitations to generate
         """
-        excitation_times = self.excitation_time_generator.generate(start_s=self.start_s, end_s=self.end_s, n_excitations=self.n_excitations)
-        excitation_locations = self.excitation_location_generator.generate(n_excitations=self.n_excitations)
+        excitation_times = self.excitation_time_generator.generate(
+            start_s=self.start_s, end_s=self.end_s, n_excitations=self.n_excitations
+        )
+        excitation_locations = self.excitation_location_generator.generate(
+            n_excitations=self.n_excitations
+        )
 
         self._excitations = (
             Excitation2D(
                 x_m=point[0],
                 y_m=point[1],
                 t_s=time,
-            ) for time, point in zip(excitation_times, excitation_locations) 
+            )
+            for time, point in zip(excitation_times, excitation_locations)
         )
 
     def yield_excitations_up_to_t(self, t_s: float) -> list[Excitation2D]:

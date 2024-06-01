@@ -1,5 +1,5 @@
 from exciton_diffusion.excitation_sources.excitation_location_generators.gaussian_spot_2d_generator import (
-    GaussianSpot2DGenerator
+    GaussianSpot2DGenerator,
 )
 
 

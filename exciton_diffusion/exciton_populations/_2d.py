@@ -4,33 +4,36 @@ from abc import abstractmethod, ABC
 
 import attr
 import numpy as np
+import numpy.typing as npt
 
 from exciton_diffusion.constants import _2PI
 from exciton_diffusion.excitation_sources.excitation_source_2d import Excitation2D
 
 
-@attr.s(slots=True)
+@attr.define
 class EmissionEvent2D:
-    x_m: float = attr.ib()
-    y_m: float = attr.ib()
+    x_m: float
+    y_m: float
     t_s: float = attr.ib(default=None)
 
 
-@attr.s(slots=True)
+@attr.define
 class EmitterPopulation2D(ABC):
-    x_coords_m: np.array = attr.ib(default=None)
-    y_coords_m: np.array = attr.ib(default=None)
-    routines: list[T.Callable[[float], list[tuple[float, float]]]] = attr.ib(factory=list)
+    x_coords_m: npt.NDArray[np.float_]
+    y_coords_m: npt.NDArray[np.float_]
+    routines: list[T.Callable[[float], T.Optional[list[EmissionEvent2D]]]] = attr.ib(
+        factory=list
+    )
 
     @abstractmethod
-    def initialize(self, *args, **kwargs):
+    def initialize(self, *args, **kwargs):  # type: ignore[no-untyped-def]
         raise NotImplementedError
 
     @property
     def n_excitons(self) -> int:
         return self.x_coords_m.shape[0]
 
-    def add_excitations_2d(self, excitations: list[Excitation2D]):
+    def add_excitations_2d(self, excitations: list[Excitation2D]) -> None:
         x_coords_m = []
         y_coords_m = []
 
@@ -38,12 +41,8 @@ class EmitterPopulation2D(ABC):
             x_coords_m.append(excitation.x_m)
             y_coords_m.append(excitation.y_m)
 
-        self.x_coords_m = np.concatenate([
-            self.x_coords_m, np.array(x_coords_m)
-        ])
-        self.y_coords_m = np.concatenate([
-            self.y_coords_m, np.array(y_coords_m)
-        ])
+        self.x_coords_m = np.concatenate([self.x_coords_m, np.array(x_coords_m)])
+        self.y_coords_m = np.concatenate([self.y_coords_m, np.array(y_coords_m)])
 
     def step(self, time_step_s: float) -> list[EmissionEvent2D]:
         emission_events: list[EmissionEvent2D] = []
@@ -55,18 +54,20 @@ class EmitterPopulation2D(ABC):
         return emission_events
 
 
-@attr.s(slots=True)
+@attr.define
 class ExcitonPopulation2D(EmitterPopulation2D):
     radiative_lifetime_s: float = attr.ib(default=None)
     nonradiative_lifetime_s: T.Optional[float] = attr.ib(default=None)
     diffusivity_m2_per_s: T.Optional[float] = attr.ib(default=None)
+    annihilation_radius_m: T.Optional[float] = attr.ib(default=None)
 
     def initialize(
         self,
         radiative_lifetime_s: float,
-        nonradiative_lifetime_s: T.Optional[float]=None,
-        diffusivity_m2_per_s: T.Optional[float]=None,
-    ):
+        nonradiative_lifetime_s: T.Optional[float] = None,
+        diffusivity_m2_per_s: T.Optional[float] = None,
+        annihilation_radius_m: T.Optional[float] = None,
+    ) -> None:
         self.x_coords_m = np.array([], dtype=np.float64)
         self.y_coords_m = np.array([], dtype=np.float64)
         self.radiative_lifetime_s = radiative_lifetime_s
@@ -75,6 +76,8 @@ class ExcitonPopulation2D(EmitterPopulation2D):
         self.routines.append(self.linear_decay)
         if diffusivity_m2_per_s is not None:
             self.routines.append(self.diffusion)
+        if annihilation_radius_m is not None:
+            self.routines.append(self.annihilation)
 
     @property
     def radiative_rate_hz(self) -> float:
@@ -88,9 +91,10 @@ class ExcitonPopulation2D(EmitterPopulation2D):
 
     def _diffusion_step_length_m(self, time_step_s: float) -> T.Optional[float]:
         if self.diffusivity_m2_per_s is not None:
-            return (self.diffusivity_m2_per_s * time_step_s) ** 0.5
+            return float((self.diffusivity_m2_per_s * time_step_s) ** 0.5)
+        return None
 
-    def linear_decay(self, time_step_s: float) -> list[tuple[float, float]]:
+    def linear_decay(self, time_step_s: float) -> list[EmissionEvent2D]:
         """Simulates linear decay processes (radiative and optionally nonradiative)
         that occur over the course of the time step.
 
@@ -112,30 +116,39 @@ class ExcitonPopulation2D(EmitterPopulation2D):
         decayed_y_m = self.y_coords_m[decayed]
         n_decayed = decayed_x_m.shape[0]
 
-        probability_decay_was_radiative = 1
+        probability_decay_was_radiative = 1.0
         if self.nonradiative_rate_hz is not None:
-            probability_decay_was_radiative = self.radiative_rate_hz / (self.radiative_rate_hz + self.nonradiative_rate_hz)
+            probability_decay_was_radiative = self.radiative_rate_hz / (
+                self.radiative_rate_hz + self.nonradiative_rate_hz
+            )
         radiative_decay_rolls = np.random.random(size=n_decayed)
-        radiative_decayed_x_m = decayed_x_m[np.where(radiative_decay_rolls <= probability_decay_was_radiative)]
-        radiative_decayed_y_m = decayed_y_m[np.where(radiative_decay_rolls <= probability_decay_was_radiative)]
+        radiative_decayed_x_m = decayed_x_m[
+            np.where(radiative_decay_rolls <= probability_decay_was_radiative)
+        ]
+        radiative_decayed_y_m = decayed_y_m[
+            np.where(radiative_decay_rolls <= probability_decay_was_radiative)
+        ]
 
         not_decayed = np.where(random_rolls > probability_of_decay)
         self.x_coords_m = self.x_coords_m[not_decayed]
         self.y_coords_m = self.y_coords_m[not_decayed]
 
         return [
-            EmissionEvent2D(x_m=x, y_m=y) for x, y
-            in zip(radiative_decayed_x_m, radiative_decayed_y_m)
+            EmissionEvent2D(x_m=x, y_m=y)
+            for x, y in zip(radiative_decayed_x_m, radiative_decayed_y_m)
         ]
 
-    def diffusion(self, time_step_s: float):
+    def diffusion(self, time_step_s: float) -> None:
         """Simulates random walk diffusion moving each exciton in the population
         one diffusion length over the course of the time step.
         """
-        directions_radians = np.random.uniform(low=0., high=_2PI, size=self.n_excitons)
+        directions_radians = np.random.uniform(low=0.0, high=_2PI, size=self.n_excitons)
 
         dx_m = np.sin(directions_radians) * self._diffusion_step_length_m(time_step_s)
         dy_m = np.cos(directions_radians) * self._diffusion_step_length_m(time_step_s)
 
         self.x_coords_m += dx_m
         self.y_coords_m += dy_m
+
+    def annihilation(self, time_step_s: float) -> None:
+        return None
