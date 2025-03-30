@@ -32,3 +32,12 @@ repos:
     rev: 22.3.0
     hooks:
     -   id: black
+-   repo: https://github.com/doublify/pre-commit-rust
+    rev: v1.0
+    hooks:
+    -   id: fmt
+        args: ['--manifest-path', 'experiment/Cargo.toml', '--']
+    -   id: cargo-check
+        args: ['--manifest-path', 'experiment/Cargo.toml', '--']
+    -   id: clippy
+        args: ['--manifest-path', 'experiment/Cargo.toml', '--']
