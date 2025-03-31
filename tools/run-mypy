@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-
-poetry run mypy --package exciton_diffusion --strict --ignore-missing-imports
