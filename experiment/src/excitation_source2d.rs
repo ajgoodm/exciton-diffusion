@@ -59,6 +59,7 @@ pub trait ExcitationSource2D {
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 struct PulsedExcitationGaussian2D {
     spot_fwhm_m: f64,
+    repetition_rate_hz: f64,
     n_excitations: usize,
     n_pulses: usize,
 
@@ -128,6 +129,7 @@ impl PulsedExcitationGaussian2D {
 
         Self {
             spot_fwhm_m,
+            repetition_rate_hz,
             n_excitations,
             n_pulses,
             cursor: 0,

@@ -4,7 +4,14 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "click>=8.1.8",
+    "matplotlib>=3.10.1",
+    "pydantic>=2.11.1",
+]
+
+[project.scripts]
+analyze = "analysis.cli:analyze"
 
 [dependency-groups]
 dev = [
