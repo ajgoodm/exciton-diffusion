@@ -21,7 +21,7 @@ class ExcitationConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-def plot(data_directory: Path) -> None:
+def plot(data_directory: Path, fig_edge_len: float = 7) -> None:
     config = read_json_file(data_directory / "config.json", ExcitationConfig)
     raw_array = read_array_f64_bigendian(data_directory / "excitations")
     if len(raw_array) != config.n_excitations * 3:  # time, x, y
@@ -30,12 +30,14 @@ def plot(data_directory: Path) -> None:
         )
 
     time = raw_array.reshape((config.n_excitations, 3))[:, 0]
-    _x = raw_array.reshape((config.n_excitations, 3))[:, 1]
-    _y = raw_array.reshape((config.n_excitations, 3))[:, 2]
+    x = raw_array.reshape((config.n_excitations, 3))[:, 1]
+    y = raw_array.reshape((config.n_excitations, 3))[:, 2]
 
     period_s = 1 / config.repetition_rate_hz
 
-    fig, (ax1, ax2, ax3) = plt.subplots(3)
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(
+        2, 2, figsize=(fig_edge_len, fig_edge_len)
+    )
     fig.suptitle("Excitation Events", fontsize=20)
     _plot_single_pulse(ax1, time, config.pulse_fwhm_s)
     _plot_pulse_train(ax2, time, period_s)
@@ -46,6 +48,7 @@ def plot(data_directory: Path) -> None:
         "average pulse",
         False,
     )
+    _plot_spot(ax4, x, y, config.spot_fwhm_m)
 
     plt.tight_layout()
     plt.show()
@@ -79,6 +82,16 @@ def _plot_pulse_train(axis: Axes, events: NDArray[np.float64], period_s: float) 
     period_annotation = ((0, period_s), (1.1 * max(cts), 1.1 * max(cts)))
     axis.plot(*period_annotation, "r-", lw=2)
     axis.legend(["Pulse train repetition period", "actual"])
+
+
+def _plot_spot(
+    axis: Axes, x: NDArray[np.float64], y: NDArray[np.float64], fwhm_m: float
+) -> None:
+    axis.set_xlabel("x (m)", fontsize=15)
+    axis.set_ylabel("y (m)", fontsize=15)
+    bins = cast(Sequence[float], np.linspace(-1.5 * fwhm_m, 1.5 * fwhm_m, 50))
+    axis.hist2d(x, y, bins)
+    axis.set_aspect("equal")
 
 
 def wrap(
