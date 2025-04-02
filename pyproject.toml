@@ -1,25 +1,22 @@
-[tool.poetry]
-name = "exciton-diffusion"
+[project]
+name = "analysis"
 version = "0.1.0"
-description = "Modelling suite for 2D photoluminescence experiments"
-authors = [
-  "Aaron Aster <aarongoodm@gmail.com>"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.1.8",
+    "matplotlib>=3.10.1",
+    "numpy>=2.2.4",
+    "pydantic>=2.11.1",
 ]
-repository = "https://github.com/ajgoodm/exciton-diffusion"
 
-[tool.poetry.dependencies]
-python = "^3.10"
-attrs = ">=23.1.0"
-numpy = "~1.23"
+[project.scripts]
+analyze = "analysis.cli:analyze"
 
-[tool.poetry.group.dev.dependencies]
-pre-commit = "~3"
-pytest = "~7"
-black = "^23.11.0"
-mypy = "^1.7.0"
-ruff = "^0.4.7"
-
-[tool.mypy]
-exclude = [
-  '/test_[^/]*.py$',
+[dependency-groups]
+dev = [
+    "mypy>=1.15.0",
+    "pylint>=3.3.6",
+    "ruff>=0.11.2",
 ]
