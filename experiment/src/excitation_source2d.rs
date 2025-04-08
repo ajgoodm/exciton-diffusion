@@ -23,6 +23,10 @@ impl Excitation2D {
         Ok(Self { coord, time })
     }
 
+    pub fn time_s(&self) -> f64 {
+        self.time.into_inner()
+    }
+
     pub fn to_bytes(self) -> [u8; 24] {
         let mut result: [u8; 24] = [0; 24];
         let (time_bytes, coord_bytes) = result.split_at_mut(8);
