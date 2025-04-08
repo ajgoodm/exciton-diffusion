@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::coord2d::Coord2D;
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct ExcitonParameters {
     pub diffusivity_m2_per_s: f64,
     pub radiative_decay_rate_per_s: f64,

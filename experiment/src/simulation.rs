@@ -12,17 +12,15 @@ enum CriticalEvent {
 struct ExcitonCollection {
     excitons: Vec<Coord2D>,
     cursor: usize, // the next empty index, the number of excitons
-    diffusivity_m2_per_s: f64,
-    exciton_radius_m: f64,
+    exciton_parameters: ExcitonParameters,
 }
 
 impl ExcitonCollection {
-    pub fn new(diffusivity_m2_per_s: f64, exciton_radius_m: f64) -> Self {
+    pub fn from_parameters(exciton_parameters: ExcitonParameters) -> Self {
         Self {
             excitons: Vec::new(),
             cursor: 0,
-            diffusivity_m2_per_s,
-            exciton_radius_m,
+            exciton_parameters,
         }
     }
 
@@ -54,11 +52,13 @@ impl ExcitonCollection {
             }
         }
 
-        if min_distance <= 2.0 * self.exciton_radius_m {
+        if min_distance <= 2.0 * self.exciton_parameters.exciton_radius_m {
             panic!("We were supposed to eliminate overlapping excitons before calling minimum_interexciton_distance_m")
         }
 
-        Some(f64::abs(min_distance - 2.0 * self.exciton_radius_m))
+        Some(f64::abs(
+            min_distance - 2.0 * self.exciton_parameters.exciton_radius_m,
+        ))
     }
 
     /// After a time step Δt, a diffusing particle with diffusivity D will move
@@ -71,13 +71,19 @@ impl ExcitonCollection {
     fn time_until_next_plausible_collision(&self) -> Option<f64> {
         match self.minimum_interexciton_distance_m() {
             // the time at which 5σ = sqrt(2DΔt) equals dist
-            Some(dist) => Some(dist.powi(2) / (2.0 * self.diffusivity_m2_per_s)),
+            Some(dist) => Some(dist.powi(2) / (2.0 * self.exciton_parameters.diffusivity_m2_per_s)),
             None => None,
         }
     }
-}
 
-impl ExcitonCollection {
+    pub fn annihilate(&mut self) -> Vec<ExcitonBiography> {
+        Vec::new()
+    }
+
+    pub fn diffuse_and_decay(&mut self, delta_t_s: f64) -> Vec<ExcitonBiography> {
+        Vec::new()
+    }
+
     pub fn next_critical_event<T: ExcitationSource2D>(
         &self,
         time_s: f64,
@@ -118,23 +124,63 @@ impl ExcitonCollection {
         }
     }
 
-    pub fn add_exciton(&mut self) {}
+    pub fn add_exciton(&mut self, excitation_2d: Excitation2D) {}
 
-    pub fn remove_exciton(&mut self, idx: usize) {}
+    fn remove_exciton(&mut self, idx: usize) {}
 
-    pub fn step(&mut self, dt: f64) {}
+    fn final_decay_event(self) -> ExcitonBiography {
+        todo!()
+    }
 }
 
 pub struct Simulation2D<T: ExcitationSource2D> {
-    minimum_step_size_s: f64,
+    minimum_time_step_s: f64,
     excitation_source: T,
     exciton_parameters: ExcitonParameters,
-    living_excitons: Vec<Coord2D>,
 }
 
 impl<T: ExcitationSource2D> Simulation2D<T> {
-    pub fn run(self) -> Vec<ExcitonBiography> {
-        let result = Vec::new();
+    pub fn run(mut self) -> Vec<ExcitonBiography> {
+        let mut result = Vec::new();
+        let mut excitons = ExcitonCollection::from_parameters(self.exciton_parameters.clone());
+        let mut time_s = self
+            .excitation_source
+            .peek()
+            .expect("Started simulation with no exictions")
+            .time_s();
+
+        loop {
+            result.extend(excitons.annihilate());
+            match excitons.next_critical_event(
+                time_s,
+                self.minimum_time_step_s,
+                &mut self.excitation_source,
+            ) {
+                CriticalEvent::NewExcitation(excitation_2d) => {
+                    // we have to simulate the time up until the new excitation event
+                    let delta_t_s = excitation_2d.time_s() - time_s;
+                    result.extend(excitons.diffuse_and_decay(delta_t_s));
+
+                    // set the current time to the excitation instant and
+                    // add the exciton to our exciton collection
+                    time_s = excitation_2d.time_s();
+                    excitons.add_exciton(excitation_2d);
+                }
+                CriticalEvent::ExcitonsCouldCollide(next_time) => {
+                    let delta_t_s = next_time - time_s;
+                    result.extend(excitons.diffuse_and_decay(delta_t_s));
+                    time_s = next_time;
+                }
+                CriticalEvent::OneExcitonRemains => {
+                    result.push(excitons.final_decay_event());
+                    break;
+                }
+                CriticalEvent::NoExcitonsRemain => {
+                    break;
+                }
+            }
+        }
+
         result
     }
 }
