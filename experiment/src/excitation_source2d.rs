@@ -27,6 +27,10 @@ impl Excitation2D {
         self.time.into_inner()
     }
 
+    pub fn take_coord(self) -> Coord2D {
+        self.coord
+    }
+
     pub fn to_bytes(self) -> [u8; 24] {
         let mut result: [u8; 24] = [0; 24];
         let (time_bytes, coord_bytes) = result.split_at_mut(8);

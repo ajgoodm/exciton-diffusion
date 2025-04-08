@@ -1,6 +1,11 @@
+use std::collections::HashSet;
+
+use rand::rngs::ThreadRng;
+use rand::seq::IndexedRandom;
+
 use crate::coord2d::Coord2D;
 use crate::excitation_source2d::{Excitation2D, ExcitationSource2D};
-use crate::exciton::{ExcitonBiography, ExcitonParameters};
+use crate::exciton::{AnnihilationOutcome, ExcitonBiography, ExcitonParameters};
 
 enum CriticalEvent {
     NewExcitation(Excitation2D),
@@ -13,6 +18,7 @@ struct ExcitonCollection {
     excitons: Vec<Coord2D>,
     cursor: usize, // the next empty index, the number of excitons
     exciton_parameters: ExcitonParameters,
+    rng: ThreadRng,
 }
 
 impl ExcitonCollection {
@@ -21,6 +27,7 @@ impl ExcitonCollection {
             excitons: Vec::new(),
             cursor: 0,
             exciton_parameters,
+            rng: rand::rng(),
         }
     }
 
@@ -76,12 +83,46 @@ impl ExcitonCollection {
         }
     }
 
-    pub fn annihilate(&mut self) -> Vec<ExcitonBiography> {
-        Vec::new()
+    pub fn annihilate(&mut self, time_s: f64) -> Vec<ExcitonBiography> {
+        let mut excitons_to_remove: HashSet<usize> = HashSet::new();
+        for idx_1 in 0..self.n_excitons() {
+            for idx_2 in 0..idx_1 {
+                let first = &self.excitons[idx_1];
+                let second = &self.excitons[idx_1];
+                let distance = first
+                    .distance(second)
+                    .expect("calculating inter-exciton distance yielded NaN")
+                    .into_inner();
+
+                if distance < 2.0 * self.exciton_parameters.exciton_radius_m {
+                    match self.exciton_parameters.annihilation_outcome {
+                        AnnihilationOutcome::One => {
+                            excitons_to_remove
+                                .insert(*[idx_1, idx_2].choose(&mut self.rng).unwrap());
+                        }
+                        AnnihilationOutcome::Both => {
+                            excitons_to_remove.extend([idx_1, idx_2]);
+                        }
+                    }
+                }
+            }
+        }
+
+        excitons_to_remove
+            .into_iter()
+            .map(|idx| {
+                let coord = self.remove_exciton(idx);
+                ExcitonBiography {
+                    destroyed_at_s: time_s,
+                    destroyed_at_position: coord,
+                    decayed_radiatively: false,
+                }
+            })
+            .collect()
     }
 
     pub fn diffuse_and_decay(&mut self, delta_t_s: f64) -> Vec<ExcitonBiography> {
-        Vec::new()
+        todo!()
     }
 
     pub fn next_critical_event<T: ExcitationSource2D>(
@@ -124,11 +165,37 @@ impl ExcitonCollection {
         }
     }
 
-    pub fn add_exciton(&mut self, excitation_2d: Excitation2D) {}
+    pub fn add_exciton(&mut self, excitation_2d: Excitation2D) {
+        if self.cursor >= self.excitons.len() {
+            self.excitons.push(excitation_2d.take_coord());
+        } else {
+            self.excitons[self.cursor] = excitation_2d.take_coord();
+        }
+        self.cursor += 1;
+    }
 
-    fn remove_exciton(&mut self, idx: usize) {}
+    /// Try to minimize allocations by moving the last element to idx
+    /// and decrementing cursor
+    fn remove_exciton(&mut self, idx: usize) -> Coord2D {
+        if idx >= self.cursor {
+            panic!("Out of bounds error when removing exciton")
+        }
 
-    fn final_decay_event(self) -> ExcitonBiography {
+        let result = self.excitons[idx].clone();
+        self.excitons.swap(idx, self.cursor - 1);
+        self.cursor -= 1;
+
+        result
+    }
+
+    fn final_decay_event(self, time_s: f64) -> ExcitonBiography {
+        if self.cursor != 1 {
+            panic!(
+                "Called final_decay_event but the number of living excitons is {}",
+                self.cursor
+            )
+        }
+
         todo!()
     }
 }
@@ -150,7 +217,7 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
             .time_s();
 
         loop {
-            result.extend(excitons.annihilate());
+            result.extend(excitons.annihilate(time_s));
             match excitons.next_critical_event(
                 time_s,
                 self.minimum_time_step_s,
@@ -172,7 +239,7 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
                     time_s = next_time;
                 }
                 CriticalEvent::OneExcitonRemains => {
-                    result.push(excitons.final_decay_event());
+                    result.push(excitons.final_decay_event(time_s));
                     break;
                 }
                 CriticalEvent::NoExcitonsRemain => {
