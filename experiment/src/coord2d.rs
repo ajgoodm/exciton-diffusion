@@ -14,6 +14,17 @@ impl Coord2D {
         })
     }
 
+    pub fn distance(&self, other: &Self) -> Result<NotNan<f64>, FloatIsNan> {
+        Ok(NotNan::new(f64::sqrt(
+            (self.x - other.x).powi(2) + (self.y - other.y).powi(2),
+        ))?)
+    }
+
+    pub fn translate(&mut self, other: &Self) {
+        self.x += other.x;
+        self.y += other.y;
+    }
+
     pub fn to_bytes(self) -> [u8; 16] {
         let mut result: [u8; 16] = [0; 16];
         let (x_bytes, y_bytes) = result.split_at_mut(8);

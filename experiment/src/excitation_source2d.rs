@@ -23,6 +23,14 @@ impl Excitation2D {
         Ok(Self { coord, time })
     }
 
+    pub fn time_s(&self) -> f64 {
+        self.time.into_inner()
+    }
+
+    pub fn into_coord(self) -> Coord2D {
+        self.coord
+    }
+
     pub fn to_bytes(self) -> [u8; 24] {
         let mut result: [u8; 24] = [0; 24];
         let (time_bytes, coord_bytes) = result.split_at_mut(8);
@@ -46,18 +54,18 @@ impl Excitation2D {
 }
 
 pub trait ExcitationSource2D {
-    /// Get the nth excitation if it exists
-    fn nth(&self, n: usize) -> Option<Excitation2D>;
-
-    /// Get the next excitation (behaves like an iterator)
-    fn next(&mut self) -> Option<Excitation2D>;
+    /// Get the excitation at index n if it exists
+    fn nth(&self, n: usize) -> Option<&Excitation2D>;
 
     /// Get the next excitation, but don't advance the iterator
-    fn peek(&self) -> Option<Excitation2D>;
+    fn peek(&self) -> Option<&Excitation2D>;
+
+    /// Get the next excitation
+    fn next(&mut self) -> Option<Excitation2D>;
 }
 
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
-struct PulsedExcitationGaussian2D {
+pub struct PulsedExcitationGaussian2D {
     spot_fwhm_m: f64,
     repetition_rate_hz: f64,
     pulse_fwhm_s: f64,
@@ -181,6 +189,35 @@ impl PulsedExcitationGaussian2D {
 
         result.excitations = excitations;
         result
+    }
+}
+
+impl ExcitationSource2D for PulsedExcitationGaussian2D {
+    fn nth(&self, n: usize) -> Option<&Excitation2D> {
+        if n >= self.n_excitations {
+            None
+        } else {
+            Some(&self.excitations[n])
+        }
+    }
+
+    /// Get the next excitation, but don't advance the iterator
+    fn peek(&self) -> Option<&Excitation2D> {
+        if self.cursor >= self.n_excitations {
+            None
+        } else {
+            Some(&self.excitations[self.cursor])
+        }
+    }
+
+    fn next(&mut self) -> Option<Excitation2D> {
+        if self.cursor >= self.n_excitations {
+            None
+        } else {
+            let result = Some(self.excitations[self.cursor].clone());
+            self.cursor += 1;
+            result
+        }
     }
 }
 
