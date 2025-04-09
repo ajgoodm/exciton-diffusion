@@ -212,9 +212,9 @@ impl ExcitonCollection {
 
     pub fn add_exciton(&mut self, excitation_2d: Excitation2D) {
         if self.cursor >= self.excitons.len() {
-            self.excitons.push(excitation_2d.take_coord());
+            self.excitons.push(excitation_2d.into_coord());
         } else {
-            self.excitons[self.cursor] = excitation_2d.take_coord();
+            self.excitons[self.cursor] = excitation_2d.into_coord();
         }
         self.cursor += 1;
     }
@@ -261,6 +261,9 @@ impl ExcitonCollection {
         self.rng.sample(StandardNormal)
     }
 
+    /// Draw a random diffusion distance based on the exciton diffusivity
+    /// and the provided time step. Always return a distance that is within
+    /// 5 standard deviations from the mean (the point of origin)
     fn capped_diffusion_distance_m(&mut self, delta_t: f64) -> f64 {
         let standard_normal_draw: f64;
         loop {

@@ -27,7 +27,7 @@ impl Excitation2D {
         self.time.into_inner()
     }
 
-    pub fn take_coord(self) -> Coord2D {
+    pub fn into_coord(self) -> Coord2D {
         self.coord
     }
 
