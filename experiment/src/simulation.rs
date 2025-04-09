@@ -118,15 +118,15 @@ impl ExcitonCollection {
             }
         }
 
-        excitons_to_remove
+        let mut exciton_idx_vec = excitons_to_remove.into_iter().collect::<Vec<_>>();
+        exciton_idx_vec.sort();
+        exciton_idx_vec
             .into_iter()
-            .map(|idx| {
-                let coord = self.remove_exciton(idx);
-                ExcitonBiography {
-                    destroyed_at_s: time_s,
-                    destroyed_at_position: coord,
-                    decayed_radiatively: false,
-                }
+            .rev()
+            .map(|idx| ExcitonBiography {
+                destroyed_at_s: time_s,
+                destroyed_at_position: self.remove_exciton(idx),
+                decayed_radiatively: false,
             })
             .collect()
     }
@@ -158,15 +158,14 @@ impl ExcitonCollection {
             }
         }
 
+        decayed_exciton_indices_and_dts.sort_by_key(|(idx, _)| *idx);
         decayed_exciton_indices_and_dts
             .into_iter()
-            .map(|(idx, dt)| {
-                let coord = self.remove_exciton(idx);
-                ExcitonBiography {
-                    destroyed_at_s: time_s + dt,
-                    destroyed_at_position: coord,
-                    decayed_radiatively: true,
-                }
+            .rev()
+            .map(|(idx, dt)| ExcitonBiography {
+                destroyed_at_s: time_s + dt,
+                destroyed_at_position: self.remove_exciton(idx),
+                decayed_radiatively: true,
             })
             .collect()
     }
@@ -277,12 +276,33 @@ impl ExcitonCollection {
 }
 
 pub struct Simulation2D<T: ExcitationSource2D> {
-    minimum_time_step_s: f64,
     excitation_source: T,
     exciton_parameters: ExcitonParameters,
+    minimum_time_step_s: f64,
 }
 
 impl<T: ExcitationSource2D> Simulation2D<T> {
+    pub fn new(exciton_parameters: ExcitonParameters, excitation_source: T) -> Self {
+        Self {
+            minimum_time_step_s: Self::min_time_step_from_params(&exciton_parameters),
+            excitation_source,
+            exciton_parameters,
+        }
+    }
+
+    /// The minimum time to diffuse one tenth of the exciton radius
+    /// assuming that over a time Δt, an exciton diffuses at most 5σ
+    /// where σ = sqrt(2DΔt)
+    ///
+    /// We can solve for the minimum time using 5 * sqrt(2D * Δt_0) = 0.1 * R
+    /// where Δt_0 is the minimum time, D is the diffusivity, and R is the exciton
+    /// radius. This yields:
+    ///     Δt_0 = (R / 50)^2 * (1 / (2 * D))
+    fn min_time_step_from_params(exciton_parameters: &ExcitonParameters) -> f64 {
+        (exciton_parameters.exciton_radius_m * 0.02).powi(2)
+            * (1.0 / (2.0 * exciton_parameters.diffusivity_m2_per_s))
+    }
+
     pub fn run(mut self) -> Vec<ExcitonBiography> {
         let mut result = Vec::new();
         let mut excitons = ExcitonCollection::from_parameters(self.exciton_parameters.clone());
@@ -325,5 +345,31 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
         }
 
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::excitation_source2d::PulsedExcitationGaussian2D;
+
+    use super::*;
+
+    #[test]
+    fn test_simulation() {
+        let parameters = ExcitonParameters {
+            diffusivity_m2_per_s: 6.0e-6,
+            radiative_decay_rate_per_s: 1.0e9,
+            non_radiative_decay_rate_per_s: 0.0,
+            exciton_radius_m: 10.0e-9,
+            annihilation_outcome: AnnihilationOutcome::One,
+        };
+
+        let excitation_source =
+            PulsedExcitationGaussian2D::new(0.5e-6, 1_000, 10, 76.0e6, 0.0000000001);
+
+        let mut simulation: Simulation2D<PulsedExcitationGaussian2D> =
+            Simulation2D::new(parameters, excitation_source);
+        let exciton_biogrpaphies = simulation.run();
+        assert_eq!(exciton_biogrpaphies.len(), 1_000) // all 1,000 excitations are accounted for
     }
 }
