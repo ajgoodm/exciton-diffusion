@@ -20,6 +20,11 @@ impl Coord2D {
         ))?)
     }
 
+    pub fn translate(&mut self, other: &Self) {
+        self.x += other.x;
+        self.y += other.y;
+    }
+
     pub fn to_bytes(self) -> [u8; 16] {
         let mut result: [u8; 16] = [0; 16];
         let (x_bytes, y_bytes) = result.split_at_mut(8);

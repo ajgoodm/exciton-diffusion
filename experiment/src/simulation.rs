@@ -2,10 +2,13 @@ use std::collections::HashSet;
 
 use rand::rngs::ThreadRng;
 use rand::seq::IndexedRandom;
+use rand::Rng;
+use rand_distr::{Distribution, Exp, StandardNormal};
 
 use crate::coord2d::Coord2D;
 use crate::excitation_source2d::{Excitation2D, ExcitationSource2D};
 use crate::exciton::{AnnihilationOutcome, ExcitonBiography, ExcitonParameters};
+use crate::utils::random_uniform_zero_to_pi;
 
 enum CriticalEvent {
     NewExcitation(Excitation2D),
@@ -19,6 +22,7 @@ struct ExcitonCollection {
     cursor: usize, // the next empty index, the number of excitons
     exciton_parameters: ExcitonParameters,
     rng: ThreadRng,
+    radiative_decay_distribution: Exp<f64>,
 }
 
 impl ExcitonCollection {
@@ -26,6 +30,8 @@ impl ExcitonCollection {
         Self {
             excitons: Vec::new(),
             cursor: 0,
+            radiative_decay_distribution: Exp::new(exciton_parameters.radiative_decay_rate_per_s)
+                .unwrap(),
             exciton_parameters,
             rng: rand::rng(),
         }
@@ -69,7 +75,7 @@ impl ExcitonCollection {
     }
 
     /// After a time step Δt, a diffusing particle with diffusivity D will move
-    /// by a random distance r with probability distribution proportional to exp(-r / 4DΔt).
+    /// by a random distance r with probability distribution proportional to exp(-r^2 / 4DΔt).
     // The distance travelled is normally distributed with standard deviation σ = sqrt(2DΔt).
     //
     // When drawing a random distance value, we can make an approximation and assume
@@ -78,7 +84,11 @@ impl ExcitonCollection {
     fn time_until_next_plausible_collision(&self) -> Option<f64> {
         match self.minimum_interexciton_distance_m() {
             // the time at which 5σ = sqrt(2DΔt) equals dist
-            Some(dist) => Some(dist.powi(2) / (2.0 * self.exciton_parameters.diffusivity_m2_per_s)),
+            Some(dist) => {
+                // if two excitons move directly toward each other,
+                // they each only need to cover half the distance
+                Some((dist * 0.5).powi(2) / (2.0 * self.exciton_parameters.diffusivity_m2_per_s))
+            }
             None => None,
         }
     }
@@ -121,8 +131,44 @@ impl ExcitonCollection {
             .collect()
     }
 
-    pub fn diffuse_and_decay(&mut self, delta_t_s: f64) -> Vec<ExcitonBiography> {
-        todo!()
+    fn diffuse_exciton_at_idx(&mut self, idx: usize, delta_t: f64) {
+        let dist = self.capped_diffusion_distance_m(delta_t);
+        let angle = random_uniform_zero_to_pi(&mut self.rng);
+        let translation_vector = Coord2D::new(angle.cos() * dist, angle.sin() * dist)
+            .expect("Calculating diffusion translation vector produced NaN");
+
+        self.excitons
+            .get_mut(idx)
+            .expect("Tried to translate exciton that does not exist")
+            .translate(&translation_vector);
+    }
+
+    pub fn diffuse_and_decay(&mut self, time_s: f64, delta_t_s: f64) -> Vec<ExcitonBiography> {
+        let mut decayed_exciton_indices_and_dts: Vec<(usize, f64)> = Vec::new();
+        for idx in 0..self.n_excitons() {
+            let radiative_decay_draw = self.radiative_decay_draw();
+            if radiative_decay_draw <= delta_t_s {
+                // the exciton decays after diffusing until its death
+                self.diffuse_exciton_at_idx(idx, radiative_decay_draw);
+                decayed_exciton_indices_and_dts.push((idx, radiative_decay_draw));
+            } else {
+                // the exciton doesn't decay this time step, but diffuses
+                // for the whole time step
+                self.diffuse_exciton_at_idx(idx, delta_t_s);
+            }
+        }
+
+        decayed_exciton_indices_and_dts
+            .into_iter()
+            .map(|(idx, dt)| {
+                let coord = self.remove_exciton(idx);
+                ExcitonBiography {
+                    destroyed_at_s: time_s + dt,
+                    destroyed_at_position: coord,
+                    decayed_radiatively: true,
+                }
+            })
+            .collect()
     }
 
     pub fn next_critical_event<T: ExcitationSource2D>(
@@ -188,7 +234,7 @@ impl ExcitonCollection {
         result
     }
 
-    fn final_decay_event(self, time_s: f64) -> ExcitonBiography {
+    fn final_decay_event(mut self, time_s: f64) -> ExcitonBiography {
         if self.cursor != 1 {
             panic!(
                 "Called final_decay_event but the number of living excitons is {}",
@@ -196,7 +242,37 @@ impl ExcitonCollection {
             )
         }
 
-        todo!()
+        let time_to_decay = self.radiative_decay_draw();
+        self.diffuse_exciton_at_idx(0, time_to_decay);
+        ExcitonBiography {
+            destroyed_at_s: time_s + time_to_decay,
+            destroyed_at_position: self.excitons[0].clone(),
+            decayed_radiatively: true,
+        }
+    }
+
+    /// Draw from the exponentially decaying probability distribution function
+    /// k_R * exp(-k_R * t) where k_R is the radiative decay rate [1/s]
+    fn radiative_decay_draw(&mut self) -> f64 {
+        self.radiative_decay_distribution.sample(&mut self.rng)
+    }
+
+    /// Draw from the standard normal (σ = 1, μ = 0) probability distribution function
+    fn standard_normal_draw(&mut self) -> f64 {
+        self.rng.sample(StandardNormal)
+    }
+
+    fn capped_diffusion_distance_m(&mut self, delta_t: f64) -> f64 {
+        let standard_normal_draw: f64;
+        loop {
+            let attempt = self.standard_normal_draw();
+            if f64::abs(attempt) <= 5.0 {
+                standard_normal_draw = attempt;
+                break;
+            }
+        }
+
+        standard_normal_draw * (0.5 * self.exciton_parameters.diffusivity_m2_per_s * delta_t).sqrt()
     }
 }
 
@@ -226,7 +302,7 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
                 CriticalEvent::NewExcitation(excitation_2d) => {
                     // we have to simulate the time up until the new excitation event
                     let delta_t_s = excitation_2d.time_s() - time_s;
-                    result.extend(excitons.diffuse_and_decay(delta_t_s));
+                    result.extend(excitons.diffuse_and_decay(time_s, delta_t_s));
 
                     // set the current time to the excitation instant and
                     // add the exciton to our exciton collection
@@ -235,7 +311,7 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
                 }
                 CriticalEvent::ExcitonsCouldCollide(next_time) => {
                     let delta_t_s = next_time - time_s;
-                    result.extend(excitons.diffuse_and_decay(delta_t_s));
+                    result.extend(excitons.diffuse_and_decay(time_s, delta_t_s));
                     time_s = next_time;
                 }
                 CriticalEvent::OneExcitonRemains => {
