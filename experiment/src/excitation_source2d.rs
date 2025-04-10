@@ -53,7 +53,7 @@ impl Excitation2D {
     }
 }
 
-pub trait ExcitationSource2D {
+pub trait ExcitationSource2D: Serialize {
     /// Get the excitation at index n if it exists
     fn nth(&self, n: usize) -> Option<&Excitation2D>;
 

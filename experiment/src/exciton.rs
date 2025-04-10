@@ -17,6 +17,17 @@ pub struct ExcitonBiography {
     pub decayed_radiatively: bool,
 }
 
+impl ExcitonBiography {
+    pub fn to_bytes(self) -> [u8; 24] {
+        let mut result: [u8; 24] = [0; 24];
+        let (time_bytes, coord_bytes) = result.split_at_mut(8);
+        time_bytes.copy_from_slice(&self.destroyed_at_s.to_be_bytes());
+        coord_bytes.copy_from_slice(&self.destroyed_at_position.to_bytes());
+
+        result
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone)]
 pub enum AnnihilationOutcome {
     Both, // both excitons are annihilated when they collide
