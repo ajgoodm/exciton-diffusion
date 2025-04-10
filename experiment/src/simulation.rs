@@ -1,9 +1,13 @@
 use std::collections::HashSet;
+use std::fs;
+use std::path::PathBuf;
 
 use rand::rngs::ThreadRng;
 use rand::seq::IndexedRandom;
 use rand::Rng;
 use rand_distr::{Distribution, Exp, StandardNormal};
+use serde::Serialize;
+use serde_json::to_string_pretty;
 
 use crate::coord2d::Coord2D;
 use crate::excitation_source2d::{Excitation2D, ExcitationSource2D};
@@ -95,10 +99,15 @@ impl ExcitonCollection {
 
     pub fn annihilate(&mut self, time_s: f64) -> Vec<ExcitonBiography> {
         let mut excitons_to_remove: HashSet<usize> = HashSet::new();
-        for idx_1 in 0..self.n_excitons() {
+
+        if self.n_excitons() < 2 {
+            return Vec::new();
+        }
+
+        for idx_1 in 1..self.n_excitons() {
             for idx_2 in 0..idx_1 {
                 let first = &self.excitons[idx_1];
-                let second = &self.excitons[idx_1];
+                let second = &self.excitons[idx_2];
                 let distance = first
                     .distance(second)
                     .expect("calculating inter-exciton distance yielded NaN")
@@ -263,7 +272,7 @@ impl ExcitonCollection {
 
     /// Draw a random diffusion distance based on the exciton diffusivity
     /// and the provided time step. Always return a distance that is within
-    /// 5 standard deviations from the mean (the point of origin)
+    /// 5 standard deviations from the mean (0, the point of origin)
     fn capped_diffusion_distance_m(&mut self, delta_t: f64) -> f64 {
         let standard_normal_draw: f64;
         loop {
@@ -275,6 +284,54 @@ impl ExcitonCollection {
         }
 
         standard_normal_draw * (0.5 * self.exciton_parameters.diffusivity_m2_per_s * delta_t).sqrt()
+    }
+}
+
+pub struct SimulationOutput<T: Serialize> {
+    exciton_biographies: Vec<ExcitonBiography>,
+    excitation_source: T,
+}
+
+impl<T: Serialize> SimulationOutput<T> {
+    pub fn new(exciton_biographies: Vec<ExcitonBiography>, excitation_source: T) -> Self {
+        Self {
+            exciton_biographies,
+            excitation_source,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.exciton_biographies.len()
+    }
+
+    fn config_path(path: &PathBuf) -> PathBuf {
+        let mut result = path.clone();
+        result.push("config");
+        result.set_extension("json");
+        result
+    }
+
+    fn emission_events_path(path: &PathBuf) -> PathBuf {
+        let mut result = path.clone();
+        result.push("emission_events");
+        result
+    }
+
+    pub fn write(self, path: &PathBuf) {
+        fs::write(
+            Self::config_path(path),
+            to_string_pretty(&self.excitation_source).unwrap(),
+        )
+        .expect("failed to write config JSON");
+
+        let emission_events_bytes: Vec<u8> = self
+            .exciton_biographies
+            .into_iter()
+            .filter(|x| x.decayed_radiatively)
+            .flat_map(|x| x.to_bytes())
+            .collect();
+        fs::write(Self::emission_events_path(path), emission_events_bytes)
+            .expect("failed to write excitation bytes");
     }
 }
 
@@ -306,7 +363,7 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
             * (1.0 / (2.0 * exciton_parameters.diffusivity_m2_per_s))
     }
 
-    pub fn run(mut self) -> Vec<ExcitonBiography> {
+    pub fn run(mut self) -> SimulationOutput<T> {
         let mut result = Vec::new();
         let mut excitons = ExcitonCollection::from_parameters(self.exciton_parameters.clone());
         let mut time_s = self
@@ -347,7 +404,7 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
             }
         }
 
-        result
+        SimulationOutput::new(result, self.excitation_source)
     }
 }
 
@@ -361,18 +418,21 @@ mod tests {
     fn test_simulation() {
         let parameters = ExcitonParameters {
             diffusivity_m2_per_s: 6.0e-6,
-            radiative_decay_rate_per_s: 1.0e9,
+            radiative_decay_rate_per_s: 1.0e8,
             non_radiative_decay_rate_per_s: 0.0,
-            exciton_radius_m: 10.0e-9,
+            exciton_radius_m: 1.0e-9,
             annihilation_outcome: AnnihilationOutcome::One,
         };
 
         let excitation_source =
-            PulsedExcitationGaussian2D::new(0.5e-6, 1_000, 10, 76.0e6, 0.0000000001);
+            PulsedExcitationGaussian2D::new(0.5e-6, 1_000, 1_000, 76.0e6, 1.0e-10);
 
-        let mut simulation: Simulation2D<PulsedExcitationGaussian2D> =
+        let simulation: Simulation2D<PulsedExcitationGaussian2D> =
             Simulation2D::new(parameters, excitation_source);
-        let exciton_biogrpaphies = simulation.run();
-        assert_eq!(exciton_biogrpaphies.len(), 1_000) // all 1,000 excitations are accounted for
+        let simulation_output = simulation.run();
+        assert_eq!(simulation_output.len(), 1_000); // all 1,000 excitations are accounted for
+
+        let tmp_dir = std::env::temp_dir();
+        simulation_output.write(&tmp_dir);
     }
 }
