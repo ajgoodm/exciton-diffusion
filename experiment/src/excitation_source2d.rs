@@ -179,8 +179,6 @@ impl PulsedExcitationGaussian2D {
         let mut result: Self = from_str(&json_str)
             .expect("failed to parse json string for PulsedExcitationGaussian2d");
 
-        let excitation_bytes =
-            fs::read(Self::excitation_path(path)).expect("failed to read excitation binary data");
         let excitations = fs::read(Self::excitation_path(path))
             .expect("failed to read excitation binary data")
             .chunks_exact(24)

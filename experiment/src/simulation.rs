@@ -99,10 +99,15 @@ impl ExcitonCollection {
 
     pub fn annihilate(&mut self, time_s: f64) -> Vec<ExcitonBiography> {
         let mut excitons_to_remove: HashSet<usize> = HashSet::new();
-        for idx_1 in 0..self.n_excitons() {
+
+        if self.n_excitons() < 2 {
+            return Vec::new();
+        }
+
+        for idx_1 in 1..self.n_excitons() {
             for idx_2 in 0..idx_1 {
                 let first = &self.excitons[idx_1];
-                let second = &self.excitons[idx_1];
+                let second = &self.excitons[idx_2];
                 let distance = first
                     .distance(second)
                     .expect("calculating inter-exciton distance yielded NaN")
@@ -322,6 +327,7 @@ impl<T: Serialize> SimulationOutput<T> {
         let emission_events_bytes: Vec<u8> = self
             .exciton_biographies
             .into_iter()
+            .filter(|x| x.decayed_radiatively)
             .flat_map(|x| x.to_bytes())
             .collect();
         fs::write(Self::emission_events_path(path), emission_events_bytes)
@@ -412,14 +418,14 @@ mod tests {
     fn test_simulation() {
         let parameters = ExcitonParameters {
             diffusivity_m2_per_s: 6.0e-6,
-            radiative_decay_rate_per_s: 1.0e9,
+            radiative_decay_rate_per_s: 1.0e8,
             non_radiative_decay_rate_per_s: 0.0,
-            exciton_radius_m: 0.0,
+            exciton_radius_m: 1.0e-9,
             annihilation_outcome: AnnihilationOutcome::One,
         };
 
         let excitation_source =
-            PulsedExcitationGaussian2D::new(0.5e-6, 1_000, 10, 76.0e6, 0.0000000001);
+            PulsedExcitationGaussian2D::new(0.5e-6, 1_000, 1_000, 76.0e6, 1.0e-10);
 
         let simulation: Simulation2D<PulsedExcitationGaussian2D> =
             Simulation2D::new(parameters, excitation_source);
