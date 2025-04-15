@@ -84,7 +84,7 @@ impl std::cmp::PartialEq for ExcitationProgressBar {
     }
 }
 
-#[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct PulsedExcitationGaussian2D {
     spot_fwhm_m: f64,
     repetition_rate_hz: f64,
@@ -100,6 +100,28 @@ pub struct PulsedExcitationGaussian2D {
 
     #[serde(skip_serializing, skip_deserializing)]
     progress_bar: ExcitationProgressBar,
+}
+
+impl std::cmp::PartialEq for PulsedExcitationGaussian2D {
+    fn eq(&self, other: &PulsedExcitationGaussian2D) -> bool {
+        self.spot_fwhm_m == other.spot_fwhm_m
+            && self.repetition_rate_hz == other.repetition_rate_hz
+            && self.pulse_fwhm_s == other.pulse_fwhm_s
+            && self.n_excitations == other.n_excitations
+            && self.n_pulses == other.n_pulses
+            && self.cursor == other.cursor
+            && self.excitations == other.excitations
+    }
+
+    fn ne(&self, other: &PulsedExcitationGaussian2D) -> bool {
+        self.spot_fwhm_m == other.spot_fwhm_m
+            || self.repetition_rate_hz != other.repetition_rate_hz
+            || self.pulse_fwhm_s != other.pulse_fwhm_s
+            || self.n_excitations != other.n_excitations
+            || self.n_pulses != other.n_pulses
+            || self.cursor != other.cursor
+            || self.excitations != other.excitations
+    }
 }
 
 impl PulsedExcitationGaussian2D {
