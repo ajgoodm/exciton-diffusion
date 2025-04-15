@@ -17,3 +17,18 @@ def read_array_f64_bigendian(path: Path) -> NDArray[np.float64]:
     with open(path, "rb") as fh:
         array = np.frombuffer(fh.read(), dtype=np.dtype(">f8"))
     return array
+
+
+def wrap(
+    events: NDArray[np.float64], period_s: float, pulse_fwhm_s: float
+) -> NDArray[np.float64]:
+    result = events.copy()
+
+    start = period_s - 4 * pulse_fwhm_s
+    for (event_idx, event) in enumerate(events):
+        if event > period_s:
+            difference = event - start
+            offset = np.floor(difference / period_s) + 1
+            result[event_idx] = event - offset * period_s
+
+    return result

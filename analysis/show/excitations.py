@@ -8,7 +8,7 @@ from matplotlib.axes import Axes
 from numpy.typing import NDArray
 from pydantic import BaseModel, ConfigDict
 
-from analysis.utils import read_array_f64_bigendian, read_json_file
+from analysis.utils import read_array_f64_bigendian, read_json_file, wrap
 
 
 class ExcitationConfig(BaseModel):
@@ -21,17 +21,18 @@ class ExcitationConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
-def plot(data_directory: Path, fig_edge_len: float = 7) -> None:
+def plot(data_directory: Path, fig_edge_len: float = 7.0) -> None:
     config = read_json_file(data_directory / "config.json", ExcitationConfig)
     raw_array = read_array_f64_bigendian(data_directory / "excitations")
-    if len(raw_array) != config.n_excitations * 3:  # time, x, y
+    n_cols = 3
+    if len(raw_array) != config.n_excitations * n_cols:  # time, x, y
         raise ValueError(
-            f"excitation array has unexpected length ({len(raw_array)}) - expected {config.n_excitations * 3}"
+            f"excitation array has unexpected length ({len(raw_array)}) - expected {config.n_excitations * n_cols}"
         )
 
-    time = raw_array.reshape((config.n_excitations, 3))[:, 0]
-    x = raw_array.reshape((config.n_excitations, 3))[:, 1]
-    y = raw_array.reshape((config.n_excitations, 3))[:, 2]
+    time = raw_array.reshape((config.n_excitations, n_cols))[:, 0]
+    x = raw_array.reshape((config.n_excitations, n_cols))[:, 1]
+    y = raw_array.reshape((config.n_excitations, n_cols))[:, 2]
 
     period_s = 1 / config.repetition_rate_hz
 
@@ -92,18 +93,3 @@ def _plot_spot(
     bins = cast(Sequence[float], np.linspace(-1.5 * fwhm_m, 1.5 * fwhm_m, 50))
     axis.hist2d(x, y, bins)
     axis.set_aspect("equal")
-
-
-def wrap(
-    events: NDArray[np.float64], period_s: float, pulse_fwhm_s: float
-) -> NDArray[np.float64]:
-    result = events.copy()
-
-    start = period_s - 4 * pulse_fwhm_s
-    for (event_idx, event) in enumerate(events):
-        if event > period_s:
-            difference = event - start
-            offset = np.floor(difference / period_s) + 1
-            result[event_idx] = event - offset * period_s
-
-    return result

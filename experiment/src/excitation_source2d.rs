@@ -1,6 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
+use indicatif::ProgressBar;
 use ordered_float::{FloatIsNan, NotNan};
 use rand::prelude::*;
 use rand_distr::{Normal, Uniform};
@@ -64,6 +65,25 @@ pub trait ExcitationSource2D: Serialize {
     fn next(&mut self) -> Option<Excitation2D>;
 }
 
+#[derive(Debug, Clone)]
+struct ExcitationProgressBar(ProgressBar);
+
+impl std::default::Default for ExcitationProgressBar {
+    fn default() -> Self {
+        ExcitationProgressBar(ProgressBar::new(0))
+    }
+}
+
+impl std::cmp::PartialEq for ExcitationProgressBar {
+    fn eq(&self, other: &ExcitationProgressBar) -> bool {
+        self.0.length() == other.0.length()
+    }
+
+    fn ne(&self, other: &ExcitationProgressBar) -> bool {
+        self.0.length() != other.0.length()
+    }
+}
+
 #[derive(Serialize, Deserialize, PartialEq, Debug, Clone)]
 pub struct PulsedExcitationGaussian2D {
     spot_fwhm_m: f64,
@@ -77,6 +97,9 @@ pub struct PulsedExcitationGaussian2D {
 
     #[serde(skip_serializing, skip_deserializing)]
     excitations: Vec<Excitation2D>,
+
+    #[serde(skip_serializing, skip_deserializing)]
+    progress_bar: ExcitationProgressBar,
 }
 
 impl PulsedExcitationGaussian2D {
@@ -144,7 +167,13 @@ impl PulsedExcitationGaussian2D {
             n_pulses,
             cursor: 0,
             excitations,
+            progress_bar: ExcitationProgressBar(ProgressBar::new(n_excitations as u64)),
         }
+    }
+
+    fn advance_cursor(&mut self) {
+        self.cursor += 1;
+        self.progress_bar.0.inc(1);
     }
 
     fn config_path(path: &PathBuf) -> PathBuf {
@@ -213,7 +242,7 @@ impl ExcitationSource2D for PulsedExcitationGaussian2D {
             None
         } else {
             let result = Some(self.excitations[self.cursor].clone());
-            self.cursor += 1;
+            self.advance_cursor();
             result
         }
     }
