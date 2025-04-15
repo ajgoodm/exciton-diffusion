@@ -25,7 +25,7 @@ def plot(data_directory: Path, fig_edge_len: float = 7.0) -> None:
 
     period_s = 1 / config.repetition_rate_hz
 
-    _, (ax1, _) = plt.subplots(2, 1, figsize=(fig_edge_len, fig_edge_len))
+    _, (ax1) = plt.subplots(1, 1, figsize=(fig_edge_len, fig_edge_len))
     _plot_wrapped(ax1, wrap(time, period_s, config.pulse_fwhm_s), period_s)
 
     plt.tight_layout()
