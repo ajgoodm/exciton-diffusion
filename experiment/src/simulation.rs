@@ -87,11 +87,11 @@ impl ExcitonCollection {
     // https://en.wikipedia.org/wiki/Standard_deviation#Rules_for_normally_distributed_data
     fn time_until_next_plausible_collision(&self) -> Option<f64> {
         match self.minimum_interexciton_distance_m() {
-            // the time at which 5σ = sqrt(2DΔt) equals dist
+            // the time Δt_0 at which 5σ = 5 * sqrt(2DΔt_0) equals dist
             Some(dist) => {
                 // if two excitons move directly toward each other,
                 // they each only need to cover half the distance
-                Some((dist * 0.5).powi(2) / (2.0 * self.exciton_parameters.diffusivity_m2_per_s))
+                Some((dist / 5.0).powi(2) / (2.0 * self.exciton_parameters.diffusivity_m2_per_s))
             }
             None => None,
         }
@@ -350,16 +350,16 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
         }
     }
 
-    /// The minimum time to diffuse one tenth of the exciton radius
+    /// The minimum time to diffuse one exciton radius
     /// assuming that over a time Δt, an exciton diffuses at most 5σ
     /// where σ = sqrt(2DΔt)
     ///
-    /// We can solve for the minimum time using 5 * sqrt(2D * Δt_0) = 0.1 * R
+    /// We can solve for the minimum time using 5 * sqrt(2D * Δt_0) =  R
     /// where Δt_0 is the minimum time, D is the diffusivity, and R is the exciton
     /// radius. This yields:
-    ///     Δt_0 = (R / 50)^2 * (1 / (2 * D))
+    ///     Δt_0 = (R / 5)^2 * (1 / (2 * D))
     fn min_time_step_from_params(exciton_parameters: &ExcitonParameters) -> f64 {
-        (exciton_parameters.exciton_radius_m * 0.02).powi(2)
+        (exciton_parameters.exciton_radius_m / 5.0).powi(2)
             * (1.0 / (2.0 * exciton_parameters.diffusivity_m2_per_s))
     }
 

@@ -41,7 +41,7 @@ def _plot_wrapped(
     axis.set_ylabel("count", fontsize=15)
     bins = cast(
         Sequence[float],
-        np.linspace(-0.05 * pulse_train_period, 0.9 * pulse_train_period, 256),
+        np.linspace(-0.1 * pulse_train_period, 1.1 * pulse_train_period, 256),
     )
     _, _, _ = axis.hist(events, bins)
     axis.semilogy()
