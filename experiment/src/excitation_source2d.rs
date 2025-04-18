@@ -55,7 +55,9 @@ impl Excitation2D {
 }
 
 pub trait ExcitationSource2D {
-    type Params: Serialize;
+    type Params: Serialize + SplittableExcitationParams + Clone;
+
+    fn new(params: Self::Params, with_progress_bar: bool) -> Self;
 
     /// Get the excitation at index n if it exists
     fn nth(&self, n: usize) -> Option<&Excitation2D>;
@@ -88,6 +90,16 @@ impl std::cmp::PartialEq for ExcitationProgressBar {
     }
 }
 
+pub trait SplittableExcitationParams {
+    fn split(self, into: usize) -> Vec<Self>
+    where
+        Self: Sized;
+
+    fn merge(bits: Vec<Self>) -> Self
+    where
+        Self: Sized;
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct PulsedExcitationGaussian2DParams {
     pub spot_fwhm_m: f64,
@@ -97,12 +109,54 @@ pub struct PulsedExcitationGaussian2DParams {
     pub n_pulses: usize,
 }
 
+fn split_evenly(val: usize, into: usize) -> Vec<usize> {
+    let quotient: usize = val / into;
+    let remainder: usize = val % into;
+
+    let mut result: Vec<usize> = std::iter::repeat_n(quotient, into).collect();
+    for batch_idx in 0..remainder {
+        result[batch_idx] += 1;
+    }
+    result
+}
+
+impl SplittableExcitationParams for PulsedExcitationGaussian2DParams {
+    fn split(self, into: usize) -> Vec<Self> {
+        split_evenly(self.n_excitations, into)
+            .into_iter()
+            .zip(split_evenly(self.n_pulses, into))
+            .map(|(n_excitations, n_pulses)| Self {
+                n_excitations,
+                n_pulses,
+                ..self
+            })
+            .collect()
+    }
+
+    fn merge(bits: Vec<Self>) -> Self {
+        let first = bits
+            .get(0)
+            .expect("Cannot merge empty collection of simulation outputs")
+            .clone();
+        let (n_excitations, n_pulses) =
+            bits.into_iter().fold((0usize, 0usize), |(ne, np), params| {
+                (ne + params.n_excitations, np + params.n_pulses)
+            });
+
+        Self {
+            n_excitations,
+            n_pulses,
+            ..first
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PulsedExcitationGaussian2D {
     params: PulsedExcitationGaussian2DParams,
     cursor: usize,
     excitations: Vec<Excitation2D>,
-    progress_bar: ExcitationProgressBar,
+    progress_bar: Option<ExcitationProgressBar>,
 }
 
 impl std::cmp::PartialEq for PulsedExcitationGaussian2D {
@@ -158,30 +212,11 @@ impl PulsedExcitationGaussian2D {
         times
     }
 
-    pub fn new(params: PulsedExcitationGaussian2DParams) -> Self {
-        let excitations: Vec<Excitation2D> =
-            Self::make_coords(params.spot_fwhm_m, params.n_excitations)
-                .into_iter()
-                .zip(Self::make_times(
-                    params.n_excitations,
-                    params.n_pulses,
-                    params.repetition_rate_hz,
-                    params.pulse_fwhm_s,
-                ))
-                .map(|(coord, time)| Excitation2D { coord, time })
-                .collect();
-
-        Self {
-            progress_bar: ExcitationProgressBar(ProgressBar::new(params.n_excitations as u64)),
-            params,
-            cursor: 0,
-            excitations,
-        }
-    }
-
     fn advance_cursor(&mut self) {
         self.cursor += 1;
-        self.progress_bar.0.inc(1);
+        if let Some(progress_bar) = self.progress_bar.as_mut() {
+            progress_bar.0.inc(1);
+        }
     }
 
     fn config_path(path: &PathBuf) -> PathBuf {
@@ -226,7 +261,7 @@ impl PulsedExcitationGaussian2D {
             .collect::<Vec<_>>();
 
         Self {
-            progress_bar: ExcitationProgressBar(ProgressBar::new(params.n_excitations as u64)),
+            progress_bar: None,
             params,
             cursor: 0,
             excitations,
@@ -236,6 +271,35 @@ impl PulsedExcitationGaussian2D {
 
 impl ExcitationSource2D for PulsedExcitationGaussian2D {
     type Params = PulsedExcitationGaussian2DParams;
+
+    fn new(params: PulsedExcitationGaussian2DParams, with_progress_bar: bool) -> Self {
+        let excitations: Vec<Excitation2D> =
+            Self::make_coords(params.spot_fwhm_m, params.n_excitations)
+                .into_iter()
+                .zip(Self::make_times(
+                    params.n_excitations,
+                    params.n_pulses,
+                    params.repetition_rate_hz,
+                    params.pulse_fwhm_s,
+                ))
+                .map(|(coord, time)| Excitation2D { coord, time })
+                .collect();
+
+        let progress_bar = if with_progress_bar {
+            Some(ExcitationProgressBar(ProgressBar::new(
+                params.n_excitations as u64,
+            )))
+        } else {
+            None
+        };
+
+        Self {
+            progress_bar,
+            params,
+            cursor: 0,
+            excitations,
+        }
+    }
 
     fn nth(&self, n: usize) -> Option<&Excitation2D> {
         if n >= self.params.n_excitations {
@@ -275,13 +339,16 @@ mod tests {
 
     #[test]
     fn test_pulsed_excitation_gaussian_2d_new() {
-        let excitations = PulsedExcitationGaussian2D::new(PulsedExcitationGaussian2DParams {
-            spot_fwhm_m: 1.0e-6,
-            repetition_rate_hz: 1.0e6,
-            pulse_fwhm_s: 100.0e-15,
-            n_excitations: 1_000,
-            n_pulses: 10,
-        });
+        let excitations = PulsedExcitationGaussian2D::new(
+            PulsedExcitationGaussian2DParams {
+                spot_fwhm_m: 1.0e-6,
+                repetition_rate_hz: 1.0e6,
+                pulse_fwhm_s: 100.0e-15,
+                n_excitations: 1_000,
+                n_pulses: 10,
+            },
+            false,
+        );
 
         assert_eq!(
             excitations.excitations.len(),

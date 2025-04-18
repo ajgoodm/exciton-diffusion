@@ -10,7 +10,7 @@ use serde::Serialize;
 use serde_json::to_string_pretty;
 
 use crate::coord2d::Coord2D;
-use crate::excitation_source2d::{Excitation2D, ExcitationSource2D};
+use crate::excitation_source2d::{Excitation2D, ExcitationSource2D, SplittableExcitationParams};
 use crate::exciton::{AnnihilationOutcome, ExcitonBiography, ExcitonParameters};
 use crate::utils::random_uniform_zero_to_pi;
 
@@ -287,13 +287,29 @@ impl ExcitonCollection {
     }
 }
 
-pub struct SimulationOutput<T: Serialize> {
+pub struct SimulationOutput<T: Serialize + SplittableExcitationParams + Clone> {
     exciton_biographies: Vec<ExcitonBiography>,
     excitation_source_params: T,
 }
 
-impl<T: Serialize> SimulationOutput<T> {
+impl<T: Serialize + SplittableExcitationParams + Clone> SimulationOutput<T> {
     pub fn new(exciton_biographies: Vec<ExcitonBiography>, excitation_source_params: T) -> Self {
+        Self {
+            exciton_biographies,
+            excitation_source_params,
+        }
+    }
+
+    pub fn merge(bits: Vec<Self>) -> Self {
+        let excitation_source_params: T = T::merge(
+            bits.iter()
+                .map(|output| output.excitation_source_params.clone())
+                .collect::<Vec<T>>(),
+        );
+        let exciton_biographies = bits.into_iter().fold(Vec::new(), |mut acc, output| {
+            acc.extend(output.exciton_biographies);
+            acc
+        });
         Self {
             exciton_biographies,
             excitation_source_params,
@@ -348,10 +364,6 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
             excitation_source,
             exciton_parameters,
         }
-    }
-
-    pub fn split(self, into: usize) -> Vec<Self> {
-        Vec::new()
     }
 
     /// The minimum time to diffuse one exciton radius
@@ -437,7 +449,8 @@ mod tests {
             n_excitations: 10,
             n_pulses: 10,
         };
-        let excitation_source = PulsedExcitationGaussian2D::new(excitation_source_params.clone());
+        let excitation_source =
+            PulsedExcitationGaussian2D::new(excitation_source_params.clone(), false);
 
         let simulation: Simulation2D<PulsedExcitationGaussian2D> =
             Simulation2D::new(parameters, excitation_source);
