@@ -350,6 +350,10 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
         }
     }
 
+    pub fn split(self, into: usize) -> Vec<Self> {
+        Vec::new()
+    }
+
     /// The minimum time to diffuse one exciton radius
     /// assuming that over a time Δt, an exciton diffuses at most 5σ
     /// where σ = sqrt(2DΔt)

@@ -1,4 +1,5 @@
 use clap::Parser;
+use rayon::prelude::*;
 
 use experiment::cli_schema::{
     ExcitonParametersInput, ExistingDirectory, ExistingFilePath, PulsedExcitationInput,
@@ -22,6 +23,9 @@ struct RunExperiment {
 
     #[arg(long)]
     output_directory: ExistingDirectory,
+
+    #[arg(long)]
+    n_processes: Option<usize>,
 }
 
 fn main() {
@@ -43,7 +47,21 @@ fn main() {
     }.excitation_source();
 
     let simulation = Simulation2D::new(exciton_parameters, excitation_source);
-    let simulation_output = simulation.run();
+    let simulation_output = if let Some(n_processes) = args.n_processes {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(n_processes)
+            .build_global()
+            .unwrap();
+        let output_shards: Vec<_> = simulation
+            .split(n_processes)
+            .into_par_iter()
+            .map(|s| s.run())
+            .collect();
+
+        panic!()
+    } else {
+        simulation.run()
+    };
 
     simulation_output.write(&args.output_directory.0);
 }

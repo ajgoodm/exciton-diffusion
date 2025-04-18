@@ -9,6 +9,7 @@ indicatif = "0.17.11"
 ordered-float = "5.0.0"
 rand = "0.9.0"
 rand_distr = "0.5.1"
+rayon = "1.10.0"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 thiserror = "2.0.12"
