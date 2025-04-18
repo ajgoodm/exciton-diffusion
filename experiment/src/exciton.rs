@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::coord2d::Coord2D;
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct ExcitonParameters {
     pub diffusivity_m2_per_s: f64,
     pub radiative_decay_rate_per_s: f64,
@@ -28,7 +28,7 @@ impl ExcitonBiography {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub enum AnnihilationOutcome {
     Both, // both excitons are annihilated when they collide
     One,  // one exciton of the pair is randomly selected to annihilate

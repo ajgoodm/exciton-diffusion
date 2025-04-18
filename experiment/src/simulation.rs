@@ -10,7 +10,7 @@ use serde::Serialize;
 use serde_json::to_string_pretty;
 
 use crate::coord2d::Coord2D;
-use crate::excitation_source2d::{Excitation2D, ExcitationSource2D};
+use crate::excitation_source2d::{Excitation2D, ExcitationSource2D, SplittableExcitationParams};
 use crate::exciton::{AnnihilationOutcome, ExcitonBiography, ExcitonParameters};
 use crate::utils::random_uniform_zero_to_pi;
 
@@ -87,11 +87,11 @@ impl ExcitonCollection {
     // https://en.wikipedia.org/wiki/Standard_deviation#Rules_for_normally_distributed_data
     fn time_until_next_plausible_collision(&self) -> Option<f64> {
         match self.minimum_interexciton_distance_m() {
-            // the time at which 5σ = sqrt(2DΔt) equals dist
+            // the time Δt_0 at which 5σ = 5 * sqrt(2DΔt_0) equals dist
             Some(dist) => {
                 // if two excitons move directly toward each other,
                 // they each only need to cover half the distance
-                Some((dist * 0.5).powi(2) / (2.0 * self.exciton_parameters.diffusivity_m2_per_s))
+                Some((dist / 5.0).powi(2) / (2.0 * self.exciton_parameters.diffusivity_m2_per_s))
             }
             None => None,
         }
@@ -287,16 +287,32 @@ impl ExcitonCollection {
     }
 }
 
-pub struct SimulationOutput<T: Serialize> {
+pub struct SimulationOutput<T: Serialize + SplittableExcitationParams + Clone> {
     exciton_biographies: Vec<ExcitonBiography>,
-    excitation_source: T,
+    excitation_source_params: T,
 }
 
-impl<T: Serialize> SimulationOutput<T> {
-    pub fn new(exciton_biographies: Vec<ExcitonBiography>, excitation_source: T) -> Self {
+impl<T: Serialize + SplittableExcitationParams + Clone> SimulationOutput<T> {
+    pub fn new(exciton_biographies: Vec<ExcitonBiography>, excitation_source_params: T) -> Self {
         Self {
             exciton_biographies,
-            excitation_source,
+            excitation_source_params,
+        }
+    }
+
+    pub fn merge(bits: Vec<Self>) -> Self {
+        let excitation_source_params: T = T::merge(
+            bits.iter()
+                .map(|output| output.excitation_source_params.clone())
+                .collect::<Vec<T>>(),
+        );
+        let exciton_biographies = bits.into_iter().fold(Vec::new(), |mut acc, output| {
+            acc.extend(output.exciton_biographies);
+            acc
+        });
+        Self {
+            exciton_biographies,
+            excitation_source_params,
         }
     }
 
@@ -320,7 +336,7 @@ impl<T: Serialize> SimulationOutput<T> {
     pub fn write(self, path: &PathBuf) {
         fs::write(
             Self::config_path(path),
-            to_string_pretty(&self.excitation_source).unwrap(),
+            to_string_pretty(&self.excitation_source_params).unwrap(),
         )
         .expect("failed to write config JSON");
 
@@ -350,20 +366,20 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
         }
     }
 
-    /// The minimum time to diffuse one tenth of the exciton radius
+    /// The minimum time to diffuse one exciton radius
     /// assuming that over a time Δt, an exciton diffuses at most 5σ
     /// where σ = sqrt(2DΔt)
     ///
-    /// We can solve for the minimum time using 5 * sqrt(2D * Δt_0) = 0.1 * R
+    /// We can solve for the minimum time using 5 * sqrt(2D * Δt_0) =  R
     /// where Δt_0 is the minimum time, D is the diffusivity, and R is the exciton
     /// radius. This yields:
-    ///     Δt_0 = (R / 50)^2 * (1 / (2 * D))
+    ///     Δt_0 = (R / 5)^2 * (1 / (2 * D))
     fn min_time_step_from_params(exciton_parameters: &ExcitonParameters) -> f64 {
-        (exciton_parameters.exciton_radius_m * 0.02).powi(2)
+        (exciton_parameters.exciton_radius_m / 5.0).powi(2)
             * (1.0 / (2.0 * exciton_parameters.diffusivity_m2_per_s))
     }
 
-    pub fn run(mut self) -> SimulationOutput<T> {
+    pub fn run(mut self) -> SimulationOutput<T::Params> {
         let mut result = Vec::new();
         let mut excitons = ExcitonCollection::from_parameters(self.exciton_parameters.clone());
         let mut time_s = self
@@ -404,13 +420,15 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
             }
         }
 
-        SimulationOutput::new(result, self.excitation_source)
+        SimulationOutput::new(result, self.excitation_source.params())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::excitation_source2d::PulsedExcitationGaussian2D;
+    use crate::excitation_source2d::{
+        PulsedExcitationGaussian2D, PulsedExcitationGaussian2DParams,
+    };
 
     use super::*;
 
@@ -424,13 +442,23 @@ mod tests {
             annihilation_outcome: AnnihilationOutcome::One,
         };
 
+        let excitation_source_params = PulsedExcitationGaussian2DParams {
+            spot_fwhm_m: 1.0e-6,
+            repetition_rate_hz: 1.0e6,
+            pulse_fwhm_s: 100.0e-15,
+            n_excitations: 10,
+            n_pulses: 10,
+        };
         let excitation_source =
-            PulsedExcitationGaussian2D::new(0.5e-6, 1_000, 1_000, 76.0e6, 1.0e-10);
+            PulsedExcitationGaussian2D::new(excitation_source_params.clone(), false);
 
         let simulation: Simulation2D<PulsedExcitationGaussian2D> =
             Simulation2D::new(parameters, excitation_source);
         let simulation_output = simulation.run();
-        assert_eq!(simulation_output.len(), 1_000); // all 1,000 excitations are accounted for
+        assert_eq!(
+            simulation_output.len(),
+            excitation_source_params.n_excitations
+        ); // all excitations are accounted for
 
         let tmp_dir = std::env::temp_dir();
         simulation_output.write(&tmp_dir);
