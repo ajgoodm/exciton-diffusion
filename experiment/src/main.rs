@@ -42,7 +42,7 @@ fn main() {
     let excitation_source_params = match (args.pulsed_excitation_input, args.pulsed_excitation_input_path) {
         (Some(input), None) => input,
         (None, Some(input_path)) => read_json_file::<PulsedExcitationInput>(input_path.clone().0).expect(
-            &format!("failed to parse pulsed excaramsitation 2D at path {:?}", input_path)
+            &format!("failed to parse pulsed pulsed excitation 2D input at path {:?}", input_path)
         ),
         _ => panic!("Must suppply exactly one: --pulsed-excitation-input XOR --pulsed-excitation-input-path")
     }.params();
