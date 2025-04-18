@@ -289,14 +289,14 @@ impl ExcitonCollection {
 
 pub struct SimulationOutput<T: Serialize> {
     exciton_biographies: Vec<ExcitonBiography>,
-    excitation_source: T,
+    excitation_source_params: T,
 }
 
 impl<T: Serialize> SimulationOutput<T> {
-    pub fn new(exciton_biographies: Vec<ExcitonBiography>, excitation_source: T) -> Self {
+    pub fn new(exciton_biographies: Vec<ExcitonBiography>, excitation_source_params: T) -> Self {
         Self {
             exciton_biographies,
-            excitation_source,
+            excitation_source_params,
         }
     }
 
@@ -320,7 +320,7 @@ impl<T: Serialize> SimulationOutput<T> {
     pub fn write(self, path: &PathBuf) {
         fs::write(
             Self::config_path(path),
-            to_string_pretty(&self.excitation_source).unwrap(),
+            to_string_pretty(&self.excitation_source_params).unwrap(),
         )
         .expect("failed to write config JSON");
 
@@ -367,7 +367,7 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
             * (1.0 / (2.0 * exciton_parameters.diffusivity_m2_per_s))
     }
 
-    pub fn run(mut self) -> SimulationOutput<T> {
+    pub fn run(mut self) -> SimulationOutput<T::Params> {
         let mut result = Vec::new();
         let mut excitons = ExcitonCollection::from_parameters(self.exciton_parameters.clone());
         let mut time_s = self
@@ -408,13 +408,15 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
             }
         }
 
-        SimulationOutput::new(result, self.excitation_source)
+        SimulationOutput::new(result, self.excitation_source.params())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::excitation_source2d::PulsedExcitationGaussian2D;
+    use crate::excitation_source2d::{
+        PulsedExcitationGaussian2D, PulsedExcitationGaussian2DParams,
+    };
 
     use super::*;
 
@@ -428,13 +430,22 @@ mod tests {
             annihilation_outcome: AnnihilationOutcome::One,
         };
 
-        let excitation_source =
-            PulsedExcitationGaussian2D::new(0.5e-6, 1_000, 1_000, 76.0e6, 1.0e-10);
+        let excitation_source_params = PulsedExcitationGaussian2DParams {
+            spot_fwhm_m: 1.0e-6,
+            repetition_rate_hz: 1.0e6,
+            pulse_fwhm_s: 100.0e-15,
+            n_excitations: 10,
+            n_pulses: 10,
+        };
+        let excitation_source = PulsedExcitationGaussian2D::new(excitation_source_params.clone());
 
         let simulation: Simulation2D<PulsedExcitationGaussian2D> =
             Simulation2D::new(parameters, excitation_source);
         let simulation_output = simulation.run();
-        assert_eq!(simulation_output.len(), 1_000); // all 1,000 excitations are accounted for
+        assert_eq!(
+            simulation_output.len(),
+            excitation_source_params.n_excitations
+        ); // all excitations are accounted for
 
         let tmp_dir = std::env::temp_dir();
         simulation_output.write(&tmp_dir);

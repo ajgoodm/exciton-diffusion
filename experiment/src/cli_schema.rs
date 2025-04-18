@@ -3,7 +3,7 @@ use std::{path::PathBuf, str::FromStr};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::excitation_source2d::PulsedExcitationGaussian2D;
+use crate::excitation_source2d::PulsedExcitationGaussian2DParams;
 use crate::exciton::{AnnihilationOutcome, ExcitonParameters};
 
 #[derive(Error, Debug)]
@@ -90,14 +90,14 @@ pub struct PulsedExcitationInput {
 }
 
 impl PulsedExcitationInput {
-    pub fn excitation_source(&self) -> PulsedExcitationGaussian2D {
-        PulsedExcitationGaussian2D::new(
-            self.spot_fwhm_m,
-            self.n_excitations,
-            self.n_pulses,
-            self.repetition_rate_hz,
-            self.pulse_fwhm_s,
-        )
+    pub fn params(&self) -> PulsedExcitationGaussian2DParams {
+        PulsedExcitationGaussian2DParams {
+            spot_fwhm_m: self.spot_fwhm_m,
+            n_excitations: self.n_excitations,
+            n_pulses: self.n_pulses,
+            repetition_rate_hz: self.repetition_rate_hz,
+            pulse_fwhm_s: self.pulse_fwhm_s,
+        }
     }
 }
 

@@ -54,7 +54,9 @@ impl Excitation2D {
     }
 }
 
-pub trait ExcitationSource2D: Serialize {
+pub trait ExcitationSource2D {
+    type Params: Serialize;
+
     /// Get the excitation at index n if it exists
     fn nth(&self, n: usize) -> Option<&Excitation2D>;
 
@@ -63,6 +65,8 @@ pub trait ExcitationSource2D: Serialize {
 
     /// Get the next excitation
     fn next(&mut self) -> Option<Excitation2D>;
+
+    fn params(&self) -> Self::Params;
 }
 
 #[derive(Debug, Clone)]
@@ -84,41 +88,32 @@ impl std::cmp::PartialEq for ExcitationProgressBar {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct PulsedExcitationGaussian2DParams {
+    pub spot_fwhm_m: f64,
+    pub repetition_rate_hz: f64,
+    pub pulse_fwhm_s: f64,
+    pub n_excitations: usize,
+    pub n_pulses: usize,
+}
+
+#[derive(Debug, Clone)]
 pub struct PulsedExcitationGaussian2D {
-    spot_fwhm_m: f64,
-    repetition_rate_hz: f64,
-    pulse_fwhm_s: f64,
-    n_excitations: usize,
-    n_pulses: usize,
-
-    // the index of the current excitation
+    params: PulsedExcitationGaussian2DParams,
     cursor: usize,
-
-    #[serde(skip_serializing, skip_deserializing)]
     excitations: Vec<Excitation2D>,
-
-    #[serde(skip_serializing, skip_deserializing)]
     progress_bar: ExcitationProgressBar,
 }
 
 impl std::cmp::PartialEq for PulsedExcitationGaussian2D {
     fn eq(&self, other: &PulsedExcitationGaussian2D) -> bool {
-        self.spot_fwhm_m == other.spot_fwhm_m
-            && self.repetition_rate_hz == other.repetition_rate_hz
-            && self.pulse_fwhm_s == other.pulse_fwhm_s
-            && self.n_excitations == other.n_excitations
-            && self.n_pulses == other.n_pulses
+        self.params == other.params
             && self.cursor == other.cursor
             && self.excitations == other.excitations
     }
 
     fn ne(&self, other: &PulsedExcitationGaussian2D) -> bool {
-        self.spot_fwhm_m == other.spot_fwhm_m
-            || self.repetition_rate_hz != other.repetition_rate_hz
-            || self.pulse_fwhm_s != other.pulse_fwhm_s
-            || self.n_excitations != other.n_excitations
-            || self.n_pulses != other.n_pulses
+        self.params != other.params
             || self.cursor != other.cursor
             || self.excitations != other.excitations
     }
@@ -163,33 +158,24 @@ impl PulsedExcitationGaussian2D {
         times
     }
 
-    pub fn new(
-        spot_fwhm_m: f64,
-        n_excitations: usize,
-        n_pulses: usize,
-        repetition_rate_hz: f64,
-        pulse_fwhm_s: f64,
-    ) -> Self {
-        let excitations: Vec<Excitation2D> = Self::make_coords(spot_fwhm_m, n_excitations)
-            .into_iter()
-            .zip(Self::make_times(
-                n_excitations,
-                n_pulses,
-                repetition_rate_hz,
-                pulse_fwhm_s,
-            ))
-            .map(|(coord, time)| Excitation2D { coord, time })
-            .collect();
+    pub fn new(params: PulsedExcitationGaussian2DParams) -> Self {
+        let excitations: Vec<Excitation2D> =
+            Self::make_coords(params.spot_fwhm_m, params.n_excitations)
+                .into_iter()
+                .zip(Self::make_times(
+                    params.n_excitations,
+                    params.n_pulses,
+                    params.repetition_rate_hz,
+                    params.pulse_fwhm_s,
+                ))
+                .map(|(coord, time)| Excitation2D { coord, time })
+                .collect();
 
         Self {
-            spot_fwhm_m,
-            repetition_rate_hz,
-            pulse_fwhm_s,
-            n_excitations,
-            n_pulses,
+            progress_bar: ExcitationProgressBar(ProgressBar::new(params.n_excitations as u64)),
+            params,
             cursor: 0,
             excitations,
-            progress_bar: ExcitationProgressBar(ProgressBar::new(n_excitations as u64)),
         }
     }
 
@@ -212,8 +198,11 @@ impl PulsedExcitationGaussian2D {
     }
 
     pub fn write(self, path: &PathBuf) {
-        fs::write(Self::config_path(path), to_string_pretty(&self).unwrap())
-            .expect("failed to write config JSON");
+        fs::write(
+            Self::config_path(path),
+            to_string_pretty(&self.params()).unwrap(),
+        )
+        .expect("failed to write config JSON");
 
         let excitation_bytes: Vec<u8> = self
             .excitations
@@ -227,7 +216,7 @@ impl PulsedExcitationGaussian2D {
     pub fn read(path: &PathBuf) -> Self {
         let json_str = fs::read_to_string(Self::config_path(path))
             .expect("failed to read config file to string");
-        let mut result: Self = from_str(&json_str)
+        let params: PulsedExcitationGaussian2DParams = from_str(&json_str)
             .expect("failed to parse json string for PulsedExcitationGaussian2d");
 
         let excitations = fs::read(Self::excitation_path(path))
@@ -236,14 +225,20 @@ impl PulsedExcitationGaussian2D {
             .map(|slice| Excitation2D::from_bytes(slice))
             .collect::<Vec<_>>();
 
-        result.excitations = excitations;
-        result
+        Self {
+            progress_bar: ExcitationProgressBar(ProgressBar::new(params.n_excitations as u64)),
+            params,
+            cursor: 0,
+            excitations,
+        }
     }
 }
 
 impl ExcitationSource2D for PulsedExcitationGaussian2D {
+    type Params = PulsedExcitationGaussian2DParams;
+
     fn nth(&self, n: usize) -> Option<&Excitation2D> {
-        if n >= self.n_excitations {
+        if n >= self.params.n_excitations {
             None
         } else {
             Some(&self.excitations[n])
@@ -252,7 +247,7 @@ impl ExcitationSource2D for PulsedExcitationGaussian2D {
 
     /// Get the next excitation, but don't advance the iterator
     fn peek(&self) -> Option<&Excitation2D> {
-        if self.cursor >= self.n_excitations {
+        if self.cursor >= self.params.n_excitations {
             None
         } else {
             Some(&self.excitations[self.cursor])
@@ -260,13 +255,17 @@ impl ExcitationSource2D for PulsedExcitationGaussian2D {
     }
 
     fn next(&mut self) -> Option<Excitation2D> {
-        if self.cursor >= self.n_excitations {
+        if self.cursor >= self.params.n_excitations {
             None
         } else {
             let result = Some(self.excitations[self.cursor].clone());
             self.advance_cursor();
             result
         }
+    }
+
+    fn params(&self) -> Self::Params {
+        self.params.clone()
     }
 }
 
@@ -276,10 +275,18 @@ mod tests {
 
     #[test]
     fn test_pulsed_excitation_gaussian_2d_new() {
-        let excitations =
-            PulsedExcitationGaussian2D::new(0.000001, 1_000_000, 10_000, 1_000_000.0, 0.0000000001);
+        let excitations = PulsedExcitationGaussian2D::new(PulsedExcitationGaussian2DParams {
+            spot_fwhm_m: 1.0e-6,
+            repetition_rate_hz: 1.0e6,
+            pulse_fwhm_s: 100.0e-15,
+            n_excitations: 1_000,
+            n_pulses: 10,
+        });
 
-        assert_eq!(excitations.excitations.len(), excitations.n_excitations);
+        assert_eq!(
+            excitations.excitations.len(),
+            excitations.params.n_excitations
+        );
 
         let tmp_dir = std::env::temp_dir();
         excitations.clone().write(&tmp_dir);
