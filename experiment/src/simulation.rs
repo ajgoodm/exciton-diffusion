@@ -19,6 +19,7 @@ enum CriticalEvent {
     ExcitonsCouldCollide(f64),
     OneExcitonRemains,
     NoExcitonsRemain,
+    ZeroRadiusExcitons,
 }
 
 struct ExcitonCollection {
@@ -86,6 +87,10 @@ impl ExcitonCollection {
     // that the distance will be less than 5σ which should be true for > 99.99994% of random draws
     // https://en.wikipedia.org/wiki/Standard_deviation#Rules_for_normally_distributed_data
     fn time_until_next_plausible_collision(&self) -> Option<f64> {
+        if self.exciton_parameters.exciton_radius_m == 0.0 {
+            return None;
+        }
+
         match self.minimum_interexciton_distance_m() {
             // the time Δt_0 at which 5σ = 5 * sqrt(2DΔt_0) equals dist
             Some(dist) => {
@@ -98,12 +103,11 @@ impl ExcitonCollection {
     }
 
     pub fn annihilate(&mut self, time_s: f64) -> Vec<ExcitonBiography> {
-        let mut excitons_to_remove: HashSet<usize> = HashSet::new();
-
-        if self.n_excitons() < 2 {
+        if self.n_excitons() < 2 || self.exciton_parameters.exciton_radius_m == 0.0 {
             return Vec::new();
         }
 
+        let mut excitons_to_remove: HashSet<usize> = HashSet::new();
         for idx_1 in 1..self.n_excitons() {
             for idx_2 in 0..idx_1 {
                 let first = &self.excitons[idx_1];
@@ -203,6 +207,8 @@ impl ExcitonCollection {
                     CriticalEvent::NoExcitonsRemain
                 } else if self.n_excitons() == 1 {
                     CriticalEvent::OneExcitonRemains
+                } else if self.exciton_parameters.exciton_radius_m == 0.0 {
+                    CriticalEvent::ZeroRadiusExcitons
                 } else {
                     panic!("Expected 0 or one exciton if there is no new excitation and no chance of inter-exciton collision")
                 }
@@ -416,6 +422,11 @@ impl<T: ExcitationSource2D> Simulation2D<T> {
                 }
                 CriticalEvent::NoExcitonsRemain => {
                     break;
+                }
+                CriticalEvent::ZeroRadiusExcitons => {
+                    let delta_t_s = self.exciton_parameters.radiative_decay_rate_per_s.powi(-1);
+                    result.extend(excitons.diffuse_and_decay(time_s, delta_t_s));
+                    time_s += delta_t_s;
                 }
             }
         }
