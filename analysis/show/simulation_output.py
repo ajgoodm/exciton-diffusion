@@ -11,6 +11,10 @@ from numpy.typing import NDArray
 
 from analysis.show.excitations import ExcitationConfig
 from analysis.utils import read_array_f64_bigendian, read_json_file, wrap
+from analysis.curve_fitting.least_squares import (
+    fit_gaussian_mean_0,
+    GaussianMean0Parameters,
+)
 
 
 def plot(data_directory: Path, fig_edge_len: float = 7.0) -> None:
@@ -36,6 +40,7 @@ def plot(data_directory: Path, fig_edge_len: float = 7.0) -> None:
         wrapped_time,
         x_m,
         period_s,
+        config.spot_fwhm_m,
         -2 * config.spot_fwhm_m,
         2 * config.spot_fwhm_m,
     )
@@ -64,6 +69,7 @@ def _plot_diffusion(
     time_s: NDArray[np.float64],
     x_m: NDArray[np.float64],
     pulse_train_period: float,
+    initial_spot_fwhm_m: float,
     min_x: float,
     max_x: float,
     n_time_bins: int = 256,
@@ -72,13 +78,34 @@ def _plot_diffusion(
     min_time = -0.05 * pulse_train_period
     max_time = 0.95 * pulse_train_period
     time_bins = np.linspace(min_time, max_time, n_time_bins)
+    time_bin_centers = (time_bins[:-1] + time_bins[1:]) / 2.0
+
     x_bins = np.linspace(min_x, max_x, n_x_bins)
+    x_bin_centers = (x_bins[:-1] + x_bins[1:]) / 2.0
 
     histogram = np.histogram2d(x_m, time_s, (x_bins, time_bins))[0]
 
+    fitted_fwhms: list[float] = []
     for time_slice_idx in range(n_time_bins - 1):
         row = histogram[:, time_slice_idx]
         max_ct = max(row)
-        histogram[:, time_slice_idx] = row / max(max_ct, 1)
+        row = row / max(max_ct, 1)
+        histogram[:, time_slice_idx] = row
 
+        fit_result = fit_gaussian_mean_0(
+            x_bin_centers,
+            row,
+            GaussianMean0Parameters(
+                amplitude=1.0, standard_deviation=initial_spot_fwhm_m
+            ),
+        )
+        fitted_fwhm = (
+            fit_result.standard_deviation * 2.355
+        )  # https://en.wikipedia.org/wiki/Full_width_at_half_maximum
+        fitted_fwhms.append(fitted_fwhm)
+
+    fitted_fwhms_arr = np.array(fitted_fwhms)
     axis.imshow(histogram, extent=(min_time, max_time, min_x, max_x), aspect="auto")
+    axis.plot(time_bin_centers, fitted_fwhms_arr, "w-")
+    axis.plot(time_bin_centers, -fitted_fwhms_arr, "w-")
+    axis.set_ylim(min_x, max_x)
