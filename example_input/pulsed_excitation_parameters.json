@@ -1,0 +1,7 @@
+{
+    "spot_fwhm_m": 0.5e-6,
+    "repetition_rate_hz": 50.0e6,
+    "pulse_fwhm_s": 100.0e-12,
+    "n_excitations": 10000,
+    "n_pulses": 1000
+}
