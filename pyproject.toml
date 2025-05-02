@@ -32,3 +32,9 @@ testpaths = [
 exclude = [
     '.*test_[a-zA-Z_\d]*\.py'
 ]
+
+[tool.uv]
+package = true
+
+[tool.setuptools]
+py-modules = ["analysis.cli"]

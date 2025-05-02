@@ -41,12 +41,7 @@ cargo run --release -- \
 ### Analyzing a result
 
 To analyze the result of a simulation, ensure that
-[uv is installed](https://docs.astral.sh/uv/getting-started/installation), ensure
-that dependencies are installed:
-```shell
-uv run pip install -e .
-```
-
+[uv is installed](https://docs.astral.sh/uv/getting-started/installation)
 and then invoke the analysis CLI pointing to the output of a simulation
 
 ```shell
