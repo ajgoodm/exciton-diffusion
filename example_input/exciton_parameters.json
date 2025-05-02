@@ -1,0 +1,6 @@
+{
+    "diffusivity_m2_per_s": 6.0e-6,
+    "radiative_decay_rate_per_s": 1.0e8,
+    "exciton_radius_m": 0.0,
+    "annihilation_outcome": "Both"
+}
