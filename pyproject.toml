@@ -9,6 +9,7 @@ dependencies = [
     "matplotlib>=3.10.1",
     "numpy>=2.2.4",
     "pydantic>=2.11.1",
+    "scipy>=1.15.2",
 ]
 
 [project.scripts]
@@ -18,5 +19,22 @@ analyze = "analysis.cli:analyze"
 dev = [
     "mypy>=1.15.0",
     "pylint>=3.3.6",
+    "pytest>=8.3.5",
     "ruff>=0.11.2",
 ]
+
+[tool.pytest.ini_options]
+testpaths = [
+    "analysis"
+]
+
+[tool.mypy]
+exclude = [
+    '.*test_[a-zA-Z_\d]*\.py'
+]
+
+[tool.uv]
+package = true
+
+[tool.setuptools]
+py-modules = ["analysis.cli"]

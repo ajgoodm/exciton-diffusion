@@ -103,12 +103,11 @@ impl ExcitonCollection {
     }
 
     pub fn annihilate(&mut self, time_s: f64) -> Vec<ExcitonBiography> {
-        let mut excitons_to_remove: HashSet<usize> = HashSet::new();
-
         if self.n_excitons() < 2 || self.exciton_parameters.exciton_radius_m == 0.0 {
             return Vec::new();
         }
 
+        let mut excitons_to_remove: HashSet<usize> = HashSet::new();
         for idx_1 in 1..self.n_excitons() {
             for idx_2 in 0..idx_1 {
                 let first = &self.excitons[idx_1];
