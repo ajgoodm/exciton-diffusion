@@ -1,8 +1,11 @@
 import numpy as np
 
 from analysis.curve_fitting.least_squares import (
+    _exponential_convolved_with_impulse_response,
     _gaussian_mean_0,
+    fit_convolved_exponetial_decay,
     fit_gaussian_mean_0,
+    ConvolvedExponentialDecayParams,
     GaussianMean0Parameters,
 )
 
@@ -28,3 +31,24 @@ class TestFitGaussianMean0:
         assert result.standard_deviation == exp_standard_deviation
         assert result.amplitude_fit_variance == 0.0  # fit input is calculated exactly
         assert result.standard_deviation_fit_variance == 0.0
+
+
+class TestFitConvolvedExponentialDecay:
+    def test_happy_path(self):
+        x = np.linspace(-5, 25, 256)
+        exponential_lifetime = 10.0
+        exp_decay_rate = 1 / exponential_lifetime
+
+        irf_fwhm = 1.0
+        y = _exponential_convolved_with_impulse_response(irf_fwhm)(x, exp_decay_rate)
+        result = fit_convolved_exponetial_decay(
+            x,
+            y,
+            irf_fwhm,
+            ConvolvedExponentialDecayParams(exp_decay_rate),
+        )
+
+        assert result.decay_rate_hz == exp_decay_rate
+        assert (
+            result.decay_rate_hz_fit_variance == 0.0
+        )  # fit input is calculated exactly
