@@ -105,8 +105,7 @@ def _exponential_convolved_with_impulse_response(
         irf = np.exp(-(domain**2) / (2 * irf_standard_deviation**2))
         irf = irf / sum(irf)
 
-        result = np.convolve(y, irf)
-        return result
+        return np.convolve(y, irf)
 
     return _inner
 

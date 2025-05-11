@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
-from collections.abc import Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,7 +15,9 @@ from analysis.curve_fitting.least_squares import (
 )
 
 
-def plot(data_directory: Path, fig_edge_len: float = 7.0) -> None:
+def plot(
+    data_directory: Path, fig_edge_len: float = 7.0, n_time_bins: int = 256
+) -> None:
     config = read_json_file(data_directory / "config.json", ExcitationConfig)
     raw_array = read_array_f64_bigendian(data_directory / "emission_events")
     n_cols = 3
@@ -33,14 +33,20 @@ def plot(data_directory: Path, fig_edge_len: float = 7.0) -> None:
     period_s = 1 / config.repetition_rate_hz
 
     _, (ax1, ax2) = plt.subplots(2, 1, figsize=(fig_edge_len, fig_edge_len))
-    wrapped_time = wrap(time, period_s, config.pulse_fwhm_s)
-    _plot_wrapped(ax1, wrapped_time, period_s)
+
+    left_shift = 4 * config.pulse_fwhm_s
+    min_x = -left_shift
+    max_x = period_s - left_shift
+    wrapped_time = wrap(time, period_s, left_shift)
+    time_bins = np.linspace(min_x, max_x, n_time_bins)
+    ax1 = _plot_wrapped(ax1, wrapped_time, time_bins)
+    ax1.set_xlim((min_x, max_x))
     _plot_diffusion(
         ax2,
         wrapped_time,
         x_m,
-        period_s,
         config.spot_fwhm_m,
+        time_bins,
         -2 * config.spot_fwhm_m,
         2 * config.spot_fwhm_m,
     )
@@ -50,34 +56,25 @@ def plot(data_directory: Path, fig_edge_len: float = 7.0) -> None:
 
 
 def _plot_wrapped(
-    axis: Axes,
-    events: NDArray[np.float64],
-    pulse_train_period: float,
-) -> None:
+    axis: Axes, events: NDArray[np.float64], bins: NDArray[np.floating]
+) -> Axes:
     axis.set_xlabel("time (s)", fontsize=15)
     axis.set_ylabel("count", fontsize=15)
-    bins = cast(
-        Sequence[float],
-        np.linspace(-0.1 * pulse_train_period, 1.1 * pulse_train_period, 256),
-    )
-    _, _, _ = axis.hist(events, bins)
+    _, _, _ = axis.hist(events, bins)  # type: ignore[arg-type]
     axis.semilogy()
+    return axis
 
 
 def _plot_diffusion(
     axis: Axes,
     time_s: NDArray[np.float64],
     x_m: NDArray[np.float64],
-    pulse_train_period: float,
     initial_spot_fwhm_m: float,
+    time_bins: NDArray[np.floating],
     min_x: float,
     max_x: float,
-    n_time_bins: int = 256,
     n_x_bins: int = 64,
 ) -> None:
-    min_time = -0.05 * pulse_train_period
-    max_time = 0.95 * pulse_train_period
-    time_bins = np.linspace(min_time, max_time, n_time_bins)
     time_bin_centers = (time_bins[:-1] + time_bins[1:]) / 2.0
 
     x_bins = np.linspace(min_x, max_x, n_x_bins)
@@ -86,7 +83,7 @@ def _plot_diffusion(
     histogram = np.histogram2d(x_m, time_s, (x_bins, time_bins))[0]
 
     fitted_fwhms: list[float] = []
-    for time_slice_idx in range(n_time_bins - 1):
+    for time_slice_idx in range(len(time_bins) - 1):
         row = histogram[:, time_slice_idx]
         max_ct = max(row)
         row = row / max(max_ct, 1)
@@ -105,7 +102,11 @@ def _plot_diffusion(
         fitted_fwhms.append(fitted_fwhm)
 
     fitted_fwhms_arr = np.array(fitted_fwhms)
-    axis.imshow(histogram, extent=(min_time, max_time, min_x, max_x), aspect="auto")
+    axis.imshow(
+        histogram,
+        extent=(float(min(time_bins)), float(max(time_bins)), min_x, max_x),  # type: ignore[type-var]
+        aspect="auto",
+    )
     axis.plot(time_bin_centers, fitted_fwhms_arr, "w-")
     axis.plot(time_bin_centers, -fitted_fwhms_arr, "w-")
     axis.set_ylim(min_x, max_x)
