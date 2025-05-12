@@ -1,3 +1,4 @@
+import math
 from dataclasses import dataclass
 from typing import Callable
 
@@ -70,47 +71,108 @@ class ConvolvedExponentialDecayFitResult:
     decay_rate_hz_fit_variance: float
 
 
-def _exponential_convolved_with_impulse_response(
-    impulse_response_fwhm: float,
+def convolve_periodic(
+    data: NDArray[np.floating], irf: NDArray[np.floating]
+) -> NDArray[np.floating]:
+    if len(data) != len(irf):
+        raise ValueError(
+            "Custom fit routine assumes data have same length and pitch as IRF"
+        )
+
+    result = np.zeros(len(data))
+    for idx, shift in enumerate(range(len(data))):
+        result[idx] = sum(np.roll(irf, shift) * data)
+
+    return result
+
+
+def _convolved_exponential(
+    impulse_response_domain: NDArray[np.floating],
+    impulse_response: NDArray[np.floating],
 ) -> Callable[[NDArray[np.floating], float], NDArray[np.floating]]:
+    """Create a callable that takes an input domain, a decay rate, and
+    calculates an exponential decay over the domain with the piecewise function:
+        x >= 0 -> exp(-decay_rate_hz * x)
+        x < 0 -> 0
+
+    and then convolves the result with the supplied impulse response function
+    (IRF, https://en.wikipedia.org/wiki/Impulse_response).
+
+    This is used in the context of fitting periodic data. The supplied domain is
+    assumed to have the data's period. Convolution edge effects are avoided by
+    assuming this periodicity
+    """
+    if len(impulse_response_domain) != len(impulse_response):
+        raise ValueError(
+            "IRF and the domain from which it's computed must have equal length"
+        )
+
+    if impulse_response_domain[0] != 0.0:
+        raise ValueError(
+            "IRF domain must contain and start at 0.0 so that convolved data is not shifted from input"
+        )
+
+    if not math.isclose(sum(impulse_response), 1.0, rel_tol=1e-6):
+        raise ValueError(
+            "IRF must sum to 1.0 so that convolved data have same area as input"
+        )
+
     def _inner(
         domain: NDArray[np.floating],
         decay_rate_hz: float,
     ) -> NDArray[np.floating]:
-        """Calculate an exponential decay over the domain with the piecewise function:
-        x >= 0 -> exp(-decay_rate_hz * x)
-        x < 0 -> 0
-
-        and then convolve the result with a gaussian impulse response (area 1)
-        with the prescribed full-width at half max over the domain. Return the
-        result normalized to a maximum value of 1, and over the original domain.
-        """
-        domain_min = min(domain)  # type: ignore[type-var]
-        domain_max = max(domain)  # type: ignore[type-var]
-        if (
-            domain_min > -2 * impulse_response_fwhm
-            or domain_max < 2 * impulse_response_fwhm
-        ):
-            raise RuntimeError(
-                "Cannot confidently deconvolve impulse response when domain does not straddle 0 and extend +/- 2 FWHM"
-            )
+        period = max(domain) - min(domain)  # type: ignore[type-var]
 
         y = np.zeros(domain.shape, dtype=domain.dtype)
         for idx, val in enumerate(domain):
-            if val >= 0:
-                y[idx] = np.exp(-decay_rate_hz * val)
+            if val < 0:
+                val = period + val
+            y[idx] = np.exp(-decay_rate_hz * val)
 
-        # IRF: impulse response function - https://en.wikipedia.org/wiki/Impulse_response
-        irf_standard_deviation = impulse_response_fwhm / 2.355
-        irf = np.exp(-(domain**2) / (2 * irf_standard_deviation**2))
-        irf = irf / sum(irf)
-
-        return np.convolve(y, irf)
+        result = convolve_periodic(y, impulse_response)
+        return result / max(result)  # type: ignore[no-any-return, type-var]
 
     return _inner
 
 
-def fit_convolved_exponetial_decay(
+def convolved_exponential(
+    domain: NDArray[np.floating],
+    decay_rate_hz: float,
+    impulse_response_fwhm_s: float,
+) -> NDArray[np.floating]:
+    return _convolved_exponential(
+        _make_irf_domain(domain), _make_gaussian_irf(domain, impulse_response_fwhm_s)
+    )(domain, decay_rate_hz)
+
+
+def _make_irf_domain(data_domain: NDArray[np.floating]) -> NDArray[np.floating]:
+    domain_diffs = data_domain[1:] - data_domain[:-1]
+    dx = np.mean(domain_diffs)
+    for diff in domain_diffs:
+        if not math.isclose(diff, dx, rel_tol=1e-6):
+            raise ValueError(
+                "fit_convolved_exponential_decay only works on periodic domain"
+            )
+
+    result = np.zeros(len(data_domain))
+    half = math.ceil(len(data_domain) / 2)
+    for idx in range(half):
+        result[idx] = idx * dx
+        result[len(data_domain) - (idx + 1)] = -(idx + 1) * dx
+
+    return result
+
+
+def _make_gaussian_irf(
+    domain: NDArray[np.floating], impulse_response_fwhm_s: float
+) -> NDArray[np.floating]:
+    irf_domain = _make_irf_domain(domain)
+    irf_standard_deviation = impulse_response_fwhm_s / 2.355
+    irf = np.exp(-(irf_domain**2) / (2 * irf_standard_deviation**2))
+    return irf / sum(irf)  # type: ignore[no-any-return]
+
+
+def fit_convolved_exponential_decay(
     x: NDArray[np.floating],
     y: NDArray[np.floating],
     impulse_response_fwhm_s: float,
@@ -120,11 +182,12 @@ def fit_convolved_exponetial_decay(
     if initial_guess is not None:
         kwargs["p0"] = (initial_guess.decay_rate_hz,)
 
-    _convolved_exponential = _exponential_convolved_with_impulse_response(
-        impulse_response_fwhm_s
-    )
+    irf_domain = _make_irf_domain(x)
+    irf = _make_gaussian_irf(x, impulse_response_fwhm_s)
+
+    convolved_exponential = _convolved_exponential(irf_domain, irf)
     fitted_parameters, covariance_matrix = curve_fit(
-        _convolved_exponential, x, y, **kwargs
+        convolved_exponential, x, y, **kwargs
     )
 
     return ConvolvedExponentialDecayFitResult(

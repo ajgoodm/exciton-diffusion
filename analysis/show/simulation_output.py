@@ -10,7 +10,10 @@ from numpy.typing import NDArray
 from analysis.show.excitations import ExcitationConfig
 from analysis.utils import read_array_f64_bigendian, read_json_file, wrap
 from analysis.curve_fitting.least_squares import (
+    convolved_exponential,
     fit_gaussian_mean_0,
+    fit_convolved_exponential_decay,
+    ConvolvedExponentialDecayParams,
     GaussianMean0Parameters,
 )
 
@@ -39,7 +42,7 @@ def plot(
     max_x = period_s - left_shift
     wrapped_time = wrap(time, period_s, left_shift)
     time_bins = np.linspace(min_x, max_x, n_time_bins)
-    ax1 = _plot_wrapped(ax1, wrapped_time, time_bins)
+    ax1 = _plot_wrapped(ax1, wrapped_time, time_bins, config.pulse_fwhm_s)
     ax1.set_xlim((min_x, max_x))
     _plot_diffusion(
         ax2,
@@ -56,12 +59,29 @@ def plot(
 
 
 def _plot_wrapped(
-    axis: Axes, events: NDArray[np.float64], bins: NDArray[np.floating]
+    axis: Axes,
+    events: NDArray[np.float64],
+    bins: NDArray[np.floating],
+    pulse_fwhm_s: float,
 ) -> Axes:
     axis.set_xlabel("time (s)", fontsize=15)
     axis.set_ylabel("count", fontsize=15)
-    _, _, _ = axis.hist(events, bins)  # type: ignore[arg-type]
+    cts, _, _ = axis.hist(events, bins)  # type: ignore[arg-type]
+    bin_centers = (bins[1:] + bins[:-1]) / 2.0
+    exponential_fit = fit_convolved_exponential_decay(
+        bin_centers,
+        cts / max(cts),
+        pulse_fwhm_s,
+        ConvolvedExponentialDecayParams(1.0e8),
+    )
+    axis.plot(
+        bin_centers,
+        convolved_exponential(bin_centers, exponential_fit.decay_rate_hz, pulse_fwhm_s)
+        * max(cts),
+        "-r",
+    )
     axis.semilogy()
+    axis.set_ylim((0.5 * min(cts), 1.5 * max(cts)))
     return axis
 
 
