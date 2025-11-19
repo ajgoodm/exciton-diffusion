@@ -47,3 +47,9 @@ and then invoke the analysis CLI pointing to the output of a simulation
 ```shell
 uv run analyze show simulation-output --data-directory /tmp/output
 ```
+
+This will produce a plot like this:
+
+![example analysis plot](./docs/figures/example_analysis_plot.png "example analysis plot")
+
+*A basic analysis of the experiment run above. The top plot shows captured radiative emission events histogrammed against time. The middle plot shows the same events histogrammed in time and along a single coordinate. The bottom panel shows the variance from a Gaussian fit to the spatial profile evolving in time in the second panel. The distribution variance grows linearly as the excitons freely diffuse in two dimensions*

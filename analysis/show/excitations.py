@@ -44,7 +44,7 @@ def plot(data_directory: Path, fig_edge_len: float = 7.0) -> None:
     _plot_pulse_train(ax2, time, period_s)
     _plot_single_pulse(
         ax3,
-        wrap(time, period_s, config.pulse_fwhm_s),
+        wrap(time, period_s, 4 * config.pulse_fwhm_s),
         config.pulse_fwhm_s,
         "average pulse",
         False,
