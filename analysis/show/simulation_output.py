@@ -35,7 +35,7 @@ def plot(
 
     period_s = 1 / config.repetition_rate_hz
 
-    _, (ax1, ax2) = plt.subplots(2, 1, figsize=(fig_edge_len, fig_edge_len))
+    _, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(fig_edge_len, fig_edge_len))
 
     left_shift = 4 * config.pulse_fwhm_s
     min_x = -left_shift
@@ -46,6 +46,7 @@ def plot(
     ax1.set_xlim((min_x, max_x))
     _plot_diffusion(
         ax2,
+        ax3,
         wrapped_time,
         x_m,
         config.spot_fwhm_m,
@@ -53,6 +54,8 @@ def plot(
         -2 * config.spot_fwhm_m,
         2 * config.spot_fwhm_m,
     )
+    ax2.set_xlim((min_x, max_x))
+    ax3.set_xlim((min_x, max_x))
 
     plt.tight_layout()
     plt.show()
@@ -86,7 +89,8 @@ def _plot_wrapped(
 
 
 def _plot_diffusion(
-    axis: Axes,
+    axis_2d_plot: Axes,
+    axis_diffusivity_fit: Axes,
     time_s: NDArray[np.float64],
     x_m: NDArray[np.float64],
     initial_spot_fwhm_m: float,
@@ -102,7 +106,7 @@ def _plot_diffusion(
 
     histogram = np.histogram2d(x_m, time_s, (x_bins, time_bins))[0]
 
-    fitted_fwhms: list[float] = []
+    fitted_stddevs: list[float] = []
     for time_slice_idx in range(len(time_bins) - 1):
         row = histogram[:, time_slice_idx]
         max_ct = max(row)
@@ -116,17 +120,28 @@ def _plot_diffusion(
                 amplitude=1.0, standard_deviation=initial_spot_fwhm_m
             ),
         )
-        fitted_fwhm = (
-            fit_result.standard_deviation * 2.355
-        )  # https://en.wikipedia.org/wiki/Full_width_at_half_maximum
-        fitted_fwhms.append(fitted_fwhm)
+        fitted_stddevs.append(fit_result.standard_deviation)
 
-    fitted_fwhms_arr = np.array(fitted_fwhms)
-    axis.imshow(
+    fitted_fwhms = (
+        np.array(fitted_stddevs) * 2.355
+    )  # https://en.wikipedia.org/wiki/Full_width_at_half_maximum
+    axis_2d_plot.imshow(
         histogram,
         extent=(float(min(time_bins)), float(max(time_bins)), min_x, max_x),  # type: ignore[type-var]
         aspect="auto",
     )
-    axis.plot(time_bin_centers, fitted_fwhms_arr, "w-")
-    axis.plot(time_bin_centers, -fitted_fwhms_arr, "w-")
-    axis.set_ylim(min_x, max_x)
+    axis_2d_plot.plot(time_bin_centers, fitted_fwhms, "w-")
+    axis_2d_plot.plot(time_bin_centers, -fitted_fwhms, "w-")
+    axis_2d_plot.set_ylim(min_x, max_x)
+    axis_2d_plot.set_ylabel("x (m)", fontsize=15)
+
+    non_zero_times: list[float] = []
+    fitted_variance: list[float] = []
+    for t, sd in zip(time_bin_centers, fitted_stddevs):
+        if t >= 0:
+            non_zero_times.append(t)
+            fitted_variance.append(sd**2)
+
+    axis_diffusivity_fit.plot(non_zero_times, fitted_variance, ".k")
+    axis_diffusivity_fit.set_ylabel("fitted Gaussian\nvariance (m$^2$)", fontsize=15)
+    axis_diffusivity_fit.set_xlabel("time (s)", fontsize=15)
